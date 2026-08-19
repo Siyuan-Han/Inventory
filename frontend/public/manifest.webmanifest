@@ -1,0 +1,17 @@
+{
+  "name": "Dress Inventory",
+  "short_name": "Dresses",
+  "description": "Wedding dress inventory, orders and sales",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#fdf6f6",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

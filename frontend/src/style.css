@@ -1,0 +1,29 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-blush-50: #fdf6f6;
+  --color-blush-100: #faeaea;
+  --color-blush-200: #f3d3d4;
+  --color-blush-300: #e6adaf;
+  --color-blush-400: #d4797c;
+  --color-blush-500: #bd5457;
+  --color-blush-600: #a03d40;
+  --color-blush-700: #833336;
+  --color-blush-800: #6d2e30;
+  --color-blush-900: #5c2a2c;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply bg-stone-50 text-stone-800 antialiased;
+}
+
+/* Keep iOS from zooming when a form field gets focus. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}

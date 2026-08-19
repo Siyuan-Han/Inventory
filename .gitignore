@@ -1,0 +1,29 @@
+# Secrets — never commit these
+.env
+.env.local
+*.env.local
+
+# Python
+backend/venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+poetry.lock
+
+# Local dev database
+*.db
+*.sqlite3
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

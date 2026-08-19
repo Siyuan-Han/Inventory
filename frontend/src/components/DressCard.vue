@@ -1,0 +1,57 @@
+<script setup>
+import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
+import { useInventoryStore } from '../stores/inventory'
+
+const props = defineProps({
+  dress: { type: Object, required: true },
+})
+
+const store = useInventoryStore()
+
+const badge = computed(() => {
+  const d = props.dress
+  if (d.in_stock > 0) return { text: `${d.in_stock} in stock`, tone: 'emerald' }
+  if (d.pending_orders > 0) return { text: store.statusLabel(d.latest_status), tone: 'amber' }
+  if (d.total_sold > 0) return { text: 'Sold out', tone: 'stone' }
+  return { text: 'No orders', tone: 'stone' }
+})
+
+const toneClass = {
+  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  amber: 'bg-amber-50 text-amber-700 border-amber-200',
+  stone: 'bg-stone-100 text-stone-600 border-stone-200',
+}
+</script>
+
+<template>
+  <RouterLink
+    :to="{ name: 'dress-detail', params: { id: dress.id } }"
+    class="group rounded-xl border border-stone-200 bg-white overflow-hidden hover:border-blush-300 hover:shadow-sm transition"
+  >
+    <div class="aspect-[3/4] bg-stone-100 flex items-center justify-center overflow-hidden">
+      <img
+        v-if="dress.photo_url"
+        :src="dress.photo_url"
+        :alt="dress.style_name || dress.dress_code"
+        class="h-full w-full object-cover group-hover:scale-[1.02] transition-transform"
+        loading="lazy"
+      />
+      <span v-else class="text-3xl text-stone-300">❖</span>
+    </div>
+
+    <div class="p-3 space-y-1.5">
+      <div class="flex items-baseline justify-between gap-2">
+        <p class="font-medium text-sm">{{ dress.dress_code }}</p>
+        <p class="text-xs text-stone-400 tabular-nums">{{ dress.total_ordered }} ordered</p>
+      </div>
+      <p class="text-sm text-stone-600 truncate">{{ dress.style_name || '—' }}</p>
+      <span
+        class="inline-block rounded-full border px-2 py-0.5 text-[11px]"
+        :class="toneClass[badge.tone]"
+      >
+        {{ badge.text }}
+      </span>
+    </div>
+  </RouterLink>
+</template>

@@ -1,0 +1,271 @@
+<script setup>
+import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useInventoryStore } from '../stores/inventory'
+import OrderForm from '../components/OrderForm.vue'
+import SaleForm from '../components/SaleForm.vue'
+
+const props = defineProps({ id: { type: [String, Number], required: true } })
+const route = useRoute()
+const router = useRouter()
+const store = useInventoryStore()
+
+const showOrderForm = ref(false)
+const showSaleForm = ref(false)
+
+const dress = computed(() => store.dress)
+const dressId = computed(() => Number(props.id ?? route.params.id))
+
+const money = (value) =>
+  value === null || value === undefined || value === ''
+    ? '—'
+    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value))
+
+const stamp = (value) =>
+  value ? new Date(value + (value.endsWith('Z') ? '' : 'Z')).toLocaleDateString() : null
+
+/** The five pipeline stages for one order, each with its timestamp. */
+function timeline(order) {
+  const reachedIndex = store.statusIndex(order.status)
+  return store.statuses.map((status, index) => ({
+    ...status,
+    at: stamp(order[status.field]),
+    done: index <= reachedIndex,
+  }))
+}
+
+function nextStatus(order) {
+  const index = store.statusIndex(order.status)
+  return index >= 0 && index < store.statuses.length - 1 ? store.statuses[index + 1] : null
+}
+
+async function advance(order) {
+  const next = nextStatus(order)
+  if (next) await store.setOrderStatus(order.id, next.value, dressId.value).catch(() => {})
+}
+
+async function removeOrder(order) {
+  if (!confirm(`Delete order #${order.id}?`)) return
+  await store.deleteOrder(order.id, dressId.value).catch(() => {})
+}
+
+async function removeSale(sale) {
+  if (!confirm(`Delete the sale from ${sale.sale_date}?`)) return
+  await store.deleteSale(sale.id, dressId.value).catch(() => {})
+}
+
+async function removeDress() {
+  if (!confirm(`Delete ${dress.value.dress_code} and all its orders and sales?`)) return
+  await store.deleteDress(dressId.value).catch(() => {})
+  if (!store.error) router.push({ name: 'dresses' })
+}
+
+async function load() {
+  await store.loadStatuses().catch(() => {})
+  await store.fetchDress(dressId.value).catch(() => {})
+}
+
+onMounted(load)
+watch(dressId, load)
+</script>
+
+<template>
+  <section v-if="dress" class="space-y-6">
+    <RouterLink :to="{ name: 'dresses' }" class="text-sm text-stone-500 hover:text-stone-800">
+      ← All dresses
+    </RouterLink>
+
+    <div class="grid sm:grid-cols-[200px_1fr] gap-5">
+      <div class="aspect-[3/4] sm:aspect-auto sm:h-64 rounded-xl bg-stone-100 overflow-hidden flex items-center justify-center">
+        <img
+          v-if="dress.photo_url"
+          :src="dress.photo_url"
+          :alt="dress.style_name || dress.dress_code"
+          class="h-full w-full object-cover"
+        />
+        <span v-else class="text-4xl text-stone-300">❖</span>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight">{{ dress.dress_code }}</h1>
+          <p class="text-stone-600">{{ dress.style_name || 'Unnamed style' }}</p>
+        </div>
+
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div>
+            <dt class="text-stone-500">Supplier</dt>
+            <dd>{{ dress.supplier || '—' }}</dd>
+          </div>
+          <div>
+            <dt class="text-stone-500">Base cost</dt>
+            <dd class="tabular-nums">{{ money(dress.base_cost) }}</dd>
+          </div>
+          <div>
+            <dt class="text-stone-500">Revenue</dt>
+            <dd class="tabular-nums">{{ money(dress.total_revenue) }}</dd>
+          </div>
+          <div>
+            <dt class="text-stone-500">Order cost</dt>
+            <dd class="tabular-nums">{{ money(dress.total_cost) }}</dd>
+          </div>
+        </dl>
+
+        <div class="flex flex-wrap gap-2 pt-1">
+          <RouterLink
+            :to="{ name: 'dress-edit', params: { id: dress.id } }"
+            class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100"
+          >
+            Edit
+          </RouterLink>
+          <button
+            class="rounded-lg border border-blush-300 text-blush-700 px-3 py-1.5 text-sm hover:bg-blush-50"
+            @click="removeDress"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3">
+      <div class="rounded-xl border border-stone-200 bg-white p-3 text-center">
+        <p class="text-2xl font-semibold tabular-nums">{{ dress.total_ordered }}</p>
+        <p class="text-xs text-stone-500">ordered</p>
+      </div>
+      <div class="rounded-xl border border-stone-200 bg-white p-3 text-center">
+        <p class="text-2xl font-semibold tabular-nums">{{ dress.in_stock }}</p>
+        <p class="text-xs text-stone-500">in stock</p>
+      </div>
+      <div class="rounded-xl border border-stone-200 bg-white p-3 text-center">
+        <p class="text-2xl font-semibold tabular-nums">{{ dress.total_sold }}</p>
+        <p class="text-xs text-stone-500">sold</p>
+      </div>
+    </div>
+
+    <!-- Orders -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Orders</h2>
+        <button
+          class="rounded-lg bg-blush-600 px-3 py-1.5 text-sm text-white hover:bg-blush-700"
+          @click="showOrderForm = true"
+        >
+          Add order
+        </button>
+      </div>
+
+      <p v-if="!dress.orders.length" class="text-sm text-stone-500">No orders yet.</p>
+
+      <article
+        v-for="order in dress.orders"
+        :key="order.id"
+        class="rounded-xl border border-stone-200 bg-white p-4 space-y-3"
+      >
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <p class="font-medium">
+            {{ order.order_date }}
+            <span class="text-stone-500 font-normal">
+              · qty {{ order.quantity }} · {{ money(order.unit_cost) }} each
+            </span>
+          </p>
+          <span class="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600">
+            {{ store.statusLabel(order.status) }}
+          </span>
+        </div>
+
+        <ol class="flex gap-1">
+          <li v-for="step in timeline(order)" :key="step.value" class="grow min-w-0">
+            <span
+              class="block h-1.5 rounded-full"
+              :class="step.done ? 'bg-blush-400' : 'bg-stone-200'"
+            />
+            <p class="mt-1 text-[10px] leading-tight text-stone-500 truncate" :title="step.label">
+              {{ step.label }}
+            </p>
+            <p class="text-[10px] text-stone-400 tabular-nums">{{ step.at || '—' }}</p>
+          </li>
+        </ol>
+
+        <p v-if="order.notes" class="text-sm text-stone-600">{{ order.notes }}</p>
+
+        <div class="flex gap-2">
+          <button
+            v-if="nextStatus(order)"
+            :disabled="store.saving"
+            class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100 disabled:opacity-50"
+            @click="advance(order)"
+          >
+            Mark {{ nextStatus(order).label.toLowerCase() }}
+          </button>
+          <button
+            :disabled="store.saving"
+            class="rounded-lg px-3 py-1.5 text-sm text-stone-500 hover:text-blush-700 disabled:opacity-50"
+            @click="removeOrder(order)"
+          >
+            Delete
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <!-- Sales -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Sales</h2>
+        <button
+          class="rounded-lg bg-blush-600 px-3 py-1.5 text-sm text-white hover:bg-blush-700"
+          @click="showSaleForm = true"
+        >
+          Record sale
+        </button>
+      </div>
+
+      <p v-if="!dress.sales.length" class="text-sm text-stone-500">No sales yet.</p>
+
+      <ul v-else class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
+        <li v-for="sale in dress.sales" :key="sale.id" class="p-3 flex items-center gap-3">
+          <div class="grow min-w-0">
+            <p class="text-sm">
+              <span class="font-medium tabular-nums">{{ money(sale.sale_price) }}</span>
+              <span class="text-stone-500"> · {{ sale.sale_date }}</span>
+              <span v-if="sale.order_id" class="text-stone-400"> · order #{{ sale.order_id }}</span>
+            </p>
+            <p v-if="sale.notes" class="text-xs text-stone-500 truncate">{{ sale.notes }}</p>
+          </div>
+          <span
+            class="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
+            :class="sale.is_cash ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-600'"
+          >
+            {{ sale.is_cash ? 'Cash' : 'Card' }}
+          </span>
+          <button
+            :disabled="store.saving"
+            class="shrink-0 text-sm text-stone-400 hover:text-blush-700 disabled:opacity-50"
+            @click="removeSale(sale)"
+          >
+            ✕
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <OrderForm
+      v-if="showOrderForm"
+      :dress-id="dress.id"
+      :default-unit-cost="dress.base_cost"
+      @close="showOrderForm = false"
+      @saved="showOrderForm = false"
+    />
+    <SaleForm
+      v-if="showSaleForm"
+      :dress-id="dress.id"
+      :orders="dress.orders"
+      @close="showSaleForm = false"
+      @saved="showSaleForm = false"
+    />
+  </section>
+
+  <p v-else-if="store.loading" class="text-sm text-stone-500">Loading…</p>
+  <p v-else class="text-sm text-stone-500">Dress not found.</p>
+</template>
