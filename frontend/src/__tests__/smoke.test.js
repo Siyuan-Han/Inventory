@@ -20,7 +20,6 @@ const STATUSES = [
   { value: 'ordered', label: 'Ordered', field: 'ordered_at' },
   { value: 'shipped_from_factory', label: 'Shipped from factory', field: 'shipped_from_factory_at' },
   { value: 'arrived_shipping_center', label: 'Shipped from shipping center', field: 'arrived_shipping_center_at' },
-  { value: 'arrived_us', label: 'Arrived in US', field: 'arrived_us_at' },
   { value: 'received', label: 'Received', field: 'received_at' },
 ]
 
@@ -30,12 +29,12 @@ const ORDER = {
   order_date: '2026-08-19',
   quantity: 2,
   unit_cost: '75.00',
-  status: 'arrived_us',
+  status: 'arrived_shipping_center',
   notes: 'split shipment',
   ordered_at: '2026-08-01T10:00:00',
   shipped_from_factory_at: '2026-08-05T10:00:00',
   arrived_shipping_center_at: '2026-08-10T10:00:00',
-  arrived_us_at: '2026-08-15T10:00:00',
+  arrived_us_at: null,
   received_at: null,
   created_at: '2026-08-01T10:00:00',
 }
@@ -80,7 +79,7 @@ const DRESS = {
   pending_orders: 1,
   total_revenue: '400.00',
   total_cost: '150.00',
-  latest_status: 'arrived_us',
+  latest_status: 'arrived_shipping_center',
   orders: [ORDER],
   sales: [SALE, SPLIT_SALE],
 }
@@ -101,8 +100,7 @@ const STATS = {
   status_breakdown: {
     ordered: 0,
     shipped_from_factory: 0,
-    arrived_shipping_center: 0,
-    arrived_us: 1,
+    arrived_shipping_center: 1,
     received: 0,
   },
 }
@@ -189,7 +187,7 @@ describe('views and components render', () => {
     expect(wrapper.text()).toContain('Revenue by payment')
     expect(wrapper.text()).toContain('$520.00') // cash
     expect(wrapper.text()).toContain('$80.00') // card
-    expect(wrapper.text()).toContain('Arrived in US')
+    expect(wrapper.text()).toContain('Shipped from shipping center')
     expect(wrapper.text()).toContain('Monthly summary')
     expect(wrapper.text()).toContain('2 sale(s)')
     // Month picker is a dropdown, not prev/next arrows.
@@ -372,8 +370,8 @@ describe('inventory store', () => {
   it('labels statuses through the pipeline', async () => {
     const store = useInventoryStore()
     await store.loadStatuses()
-    expect(store.statusLabel('arrived_us')).toBe('Arrived in US')
-    expect(store.statusIndex('received')).toBe(4)
+    expect(store.statusLabel('arrived_shipping_center')).toBe('Shipped from shipping center')
+    expect(store.statusIndex('received')).toBe(3)
   })
 
   it('archiving a dress drops it from the currently loaded list', async () => {

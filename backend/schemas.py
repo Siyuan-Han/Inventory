@@ -5,11 +5,14 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 # The order status pipeline, in the sequence an order moves through.
+# `arrived_us` was dropped from the active pipeline — shipping center goes
+# straight to received now. The dress_order.arrived_us_at column and the
+# OrderRead/OrderUpdate fields below stay, so any historical value already
+# on an order is preserved; it just isn't part of the pipeline going forward.
 ORDER_STATUSES = [
     "ordered",
     "shipped_from_factory",
     "arrived_shipping_center",
-    "arrived_us",
     "received",
 ]
 
@@ -18,7 +21,6 @@ STATUS_TIMESTAMP_FIELD = {
     "ordered": "ordered_at",
     "shipped_from_factory": "shipped_from_factory_at",
     "arrived_shipping_center": "arrived_shipping_center_at",
-    "arrived_us": "arrived_us_at",
     "received": "received_at",
 }
 
@@ -26,7 +28,6 @@ STATUS_LABELS = {
     "ordered": "Ordered",
     "shipped_from_factory": "Shipped from factory",
     "arrived_shipping_center": "Shipped from shipping center",
-    "arrived_us": "Arrived in US",
     "received": "Received",
 }
 
