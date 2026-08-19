@@ -1,16 +1,22 @@
 {
-  "name": "Dress Inventory",
-  "short_name": "Dresses",
+  "name": "C&Z Studio",
+  "short_name": "C&Z Studio",
   "description": "Wedding dress inventory, orders and sales",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fafaf9",
+  "background_color": "#f0e5d8",
   "theme_color": "#fdf6f6",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
