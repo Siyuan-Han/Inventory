@@ -69,18 +69,20 @@ phone and "Add to Home Screen" to install it.
 Tables are created on startup if they are missing (`Base.metadata.create_all`),
 so a fresh Supabase project needs no manual SQL.
 
-`DATABASE_URL` must be URL-encoded — `!` becomes `%21`:
-
-```
-postgresql+asyncpg://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
-```
-
-The direct host resolves over IPv6 only. On an IPv4-only network use the session
-pooler string from the Supabase dashboard instead:
+This project's direct host (`db.<project-ref>.supabase.co:5432`) refuses
+connections even though the project is active — the session pooler is the one
+that works, so `DATABASE_URL` uses it:
 
 ```
 postgresql+asyncpg://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres
 ```
+
+The region isn't shown in the dashboard's default connection string — get it
+from Settings → Database → Connection Pooling (this project is `us-east-2`).
+The pooler username is `postgres.<project-ref>`, not plain `postgres`.
+
+`DATABASE_URL` must be URL-encoded — `!` becomes `%21` (not needed for the
+current password).
 
 For offline work, point it at SQLite — no other change needed:
 

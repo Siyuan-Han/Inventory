@@ -1,13 +1,13 @@
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import Dress
+from models import Dress, DressOrder, Sale
 from rollups import dress_rollup
 from schemas import DressCreate, DressDetail, DressRead, DressUpdate
 
@@ -98,8 +98,13 @@ async def update_dress(
 
 @router.delete("/{dress_id}", status_code=204)
 async def delete_dress(dress_id: int, db: AsyncSession = Depends(get_db)) -> None:
-    dress = await db.get(Dress, dress_id)
-    if dress is None:
+    exists = await db.scalar(select(Dress.id).where(Dress.id == dress_id))
+    if exists is None:
         raise HTTPException(status_code=404, detail=f"Dress {dress_id} not found")
-    await db.delete(dress)
+
+    # sale.order_id has no ON DELETE action, so children must go in dependency
+    # order: sales, then orders, then the dress itself.
+    await db.execute(delete(Sale).where(Sale.dress_id == dress_id))
+    await db.execute(delete(DressOrder).where(DressOrder.dress_id == dress_id))
+    await db.execute(delete(Dress).where(Dress.id == dress_id))
     await db.commit()

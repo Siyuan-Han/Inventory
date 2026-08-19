@@ -2,11 +2,11 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import Dress, DressOrder
+from models import Dress, DressOrder, Sale
 from schemas import ORDER_STATUSES, STATUS_TIMESTAMP_FIELD, OrderCreate, OrderRead, OrderUpdate
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -100,5 +100,8 @@ async def update_order(
 @router.delete("/{order_id}", status_code=204)
 async def delete_order(order_id: int, db: AsyncSession = Depends(get_db)) -> None:
     order = await get_or_404(db, order_id)
+    # sale.order_id has no ON DELETE action; unlink any sales instead of
+    # blowing up, since a recorded sale shouldn't disappear with the order.
+    await db.execute(update(Sale).where(Sale.order_id == order_id).values(order_id=None))
     await db.delete(order)
     await db.commit()
