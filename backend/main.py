@@ -100,6 +100,7 @@ async def stats(db: AsyncSession = Depends(get_db)) -> DashboardStats:
         totals.total_sold += roll["total_sold"]
         totals.total_revenue += roll["total_revenue"]
         totals.total_cost += roll["total_cost"]
+        totals.cost_of_goods_sold += roll["cost_of_goods_sold"]
         for sale in dress.sales:
             cash, card = sale_payment_split(sale)
             totals.cash_revenue += cash
@@ -111,11 +112,12 @@ async def stats(db: AsyncSession = Depends(get_db)) -> DashboardStats:
             totals.total_ordered += roll["total_ordered"]
             totals.total_received += roll["total_received"]
             totals.in_stock += roll["in_stock"]
+            totals.inventory_value += roll["inventory_value"]
             totals.pending_orders += roll["pending_orders"]
             for order in dress.orders:
                 breakdown[order.status or "ordered"] += 1
 
-    totals.profit = totals.total_revenue - totals.total_cost
+    totals.profit = totals.total_revenue - totals.cost_of_goods_sold
     totals.status_breakdown = {s: breakdown.get(s, 0) for s in ORDER_STATUSES}
     return totals
 

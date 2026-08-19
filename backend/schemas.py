@@ -185,8 +185,10 @@ class DashboardStats(BaseModel):
     in_stock: int = 0
     pending_orders: int = 0
     total_revenue: Decimal = Decimal("0")
-    total_cost: Decimal = Decimal("0")
-    profit: Decimal = Decimal("0")
+    total_cost: Decimal = Decimal("0")  # cost of everything ordered, sold or not
+    cost_of_goods_sold: Decimal = Decimal("0")  # buying cost of sold dresses only
+    inventory_value: Decimal = Decimal("0")  # buying cost still sitting unsold
+    profit: Decimal = Decimal("0")  # total_revenue - cost_of_goods_sold
     cash_sales: int = 0
     cash_revenue: Decimal = Decimal("0")
     card_revenue: Decimal = Decimal("0")

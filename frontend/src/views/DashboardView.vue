@@ -76,7 +76,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="grid gap-3 sm:grid-cols-3">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div class="rounded-xl border border-stone-200 bg-white p-4">
         <p class="text-xs uppercase tracking-wide text-stone-500">Revenue</p>
         <p class="mt-1 text-2xl font-semibold tabular-nums">
@@ -84,10 +84,18 @@ onMounted(async () => {
         </p>
       </div>
       <div class="rounded-xl border border-stone-200 bg-white p-4">
-        <p class="text-xs uppercase tracking-wide text-stone-500">Cost of orders</p>
+        <p class="text-xs uppercase tracking-wide text-stone-500">Cost</p>
         <p class="mt-1 text-2xl font-semibold tabular-nums">
-          {{ money(store.stats?.total_cost) }}
+          {{ money(store.stats?.cost_of_goods_sold) }}
         </p>
+        <p class="mt-0.5 text-xs text-stone-400">sold dresses only</p>
+      </div>
+      <div class="rounded-xl border border-stone-200 bg-white p-4">
+        <p class="text-xs uppercase tracking-wide text-stone-500">Inventory</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums">
+          {{ money(store.stats?.inventory_value) }}
+        </p>
+        <p class="mt-0.5 text-xs text-stone-400">unsold stock, at cost</p>
       </div>
       <div class="rounded-xl border border-stone-200 bg-white p-4">
         <p class="text-xs uppercase tracking-wide text-stone-500">Profit</p>
@@ -97,6 +105,7 @@ onMounted(async () => {
         >
           {{ money(store.stats?.profit) }}
         </p>
+        <p class="mt-0.5 text-xs text-stone-400">revenue − cost</p>
       </div>
     </div>
 

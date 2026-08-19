@@ -93,6 +93,8 @@ const STATS = {
   pending_orders: 1,
   total_revenue: '600.00',
   total_cost: '150.00',
+  cost_of_goods_sold: '150.00',
+  inventory_value: '0',
   profit: '450.00',
   cash_sales: 1,
   cash_revenue: '520.00',
@@ -183,7 +185,11 @@ describe('views and components render', () => {
     const wrapper = await mountWith(DashboardView)
     expect(wrapper.text()).toContain('Dresses')
     expect(wrapper.text()).toContain('$600.00') // all-time revenue
-    expect(wrapper.text()).toContain('$450.00') // all-time profit
+    expect(wrapper.text()).toContain('Cost')
+    expect(wrapper.text()).toContain('sold dresses only')
+    expect(wrapper.text()).toContain('Inventory')
+    expect(wrapper.text()).toContain('unsold stock, at cost')
+    expect(wrapper.text()).toContain('$450.00') // all-time profit (revenue - cost of goods sold)
     expect(wrapper.text()).toContain('Revenue by payment')
     expect(wrapper.text()).toContain('$520.00') // cash
     expect(wrapper.text()).toContain('$80.00') // card

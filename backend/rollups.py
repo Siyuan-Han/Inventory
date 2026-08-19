@@ -43,6 +43,18 @@ def dress_rollup(dress: Dress) -> Dict[str, Any]:
         Decimal("0"),
     )
 
+    # Split what was spent ordering this style into cost of goods sold
+    # (charged against revenue) and inventory value (unsold stock, not yet
+    # an expense). We don't track which specific physical unit a sale came
+    # from, so cost is allocated by weighted-average unit cost across this
+    # dress's orders — standard when individual units aren't tracked. A sale
+    # with no matching order (more sold than ever ordered) adds no cost,
+    # since there's nothing to allocate from.
+    avg_unit_cost = total_cost / total_ordered if total_ordered else Decimal("0")
+    units_sold_with_cost_basis = min(total_sold, total_ordered)
+    cost_of_goods_sold = avg_unit_cost * units_sold_with_cost_basis
+    inventory_value = total_cost - cost_of_goods_sold
+
     # The order most recently *created* — not the one with the latest
     # order_date, which can tie (or be backdated) and no longer reflects
     # which order actually changed status last.
@@ -56,5 +68,7 @@ def dress_rollup(dress: Dress) -> Dict[str, Any]:
         "pending_orders": pending_orders,
         "total_revenue": total_revenue,
         "total_cost": total_cost,
+        "cost_of_goods_sold": cost_of_goods_sold,
+        "inventory_value": inventory_value,
         "latest_status": latest_order.status if latest_order else None,
     }
