@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useInventoryStore } from '../stores/inventory'
 import PhotoDropzone from '../components/PhotoDropzone.vue'
+import ComboBox from '../components/ComboBox.vue'
 
 const props = defineProps({ id: { type: [String, Number], default: null } })
 const route = useRoute()
@@ -23,6 +24,7 @@ const form = reactive({
 })
 
 onMounted(async () => {
+  store.fetchSuppliers().catch(() => {})
   if (isEdit.value) {
     const dress = await store.fetchDress(dressId.value).catch(() => null)
     if (!dress) return
@@ -95,12 +97,14 @@ async function submit() {
       <div class="grid grid-cols-2 gap-3">
         <label class="block">
           <span class="text-sm text-stone-600">Supplier</span>
-          <input
-            v-model="form.supplier"
-            maxlength="200"
-            placeholder="Shanghai Factory"
-            class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-          />
+          <div class="mt-1">
+            <ComboBox
+              v-model="form.supplier"
+              :options="store.suppliers"
+              :maxlength="200"
+              placeholder="Shanghai Factory"
+            />
+          </div>
         </label>
         <label class="block">
           <span class="text-sm text-stone-600">Base cost</span>

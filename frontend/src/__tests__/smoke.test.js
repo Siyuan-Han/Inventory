@@ -13,6 +13,7 @@ import AddDressView from '../views/AddDressView.vue'
 import DressCard from '../components/DressCard.vue'
 import OrderForm from '../components/OrderForm.vue'
 import SaleForm from '../components/SaleForm.vue'
+import ComboBox from '../components/ComboBox.vue'
 import { useInventoryStore } from '../stores/inventory'
 
 const STATUSES = [
@@ -324,6 +325,26 @@ describe('views and components render', () => {
     expect(wrapper.text()).toContain('assigned automatically')
     // No dress-code text input in the add flow.
     expect(wrapper.find('input[required]').exists()).toBe(false)
+  })
+
+  it('Add dress form suggests existing suppliers and accepts a new one', async () => {
+    const wrapper = await mountWith(AddDressView, { route: '/dresses/new' })
+    const { api } = await import('../api')
+    expect(api.suppliers).toHaveBeenCalled()
+
+    const supplierInput = wrapper.findComponent(ComboBox).find('input')
+    await supplierInput.trigger('focus')
+    // Both known suppliers show up as options.
+    expect(wrapper.text()).toContain('Shanghai Factory')
+    expect(wrapper.text()).toContain('Beijing Silks')
+
+    await wrapper.findComponent(ComboBox).vm.$emit('update:modelValue', 'Shanghai Factory')
+    await flushPromises()
+    expect(wrapper.findComponent(ComboBox).props('modelValue')).toBe('Shanghai Factory')
+
+    // A brand-new supplier can still be typed freely.
+    await wrapper.findComponent(ComboBox).vm.$emit('update:modelValue', 'A Brand New Supplier')
+    expect(wrapper.findComponent(ComboBox).props('modelValue')).toBe('A Brand New Supplier')
   })
 
   it('Edit dress prefills from the API', async () => {
