@@ -26,17 +26,19 @@ def validate_status(status: str) -> str:
     return status
 
 
-def stamp_status(order: DressOrder, status: str) -> None:
+def stamp_status(order: DressOrder, status: str, when: Optional[datetime] = None) -> None:
     """Record the moment an order reached `status`, if not already recorded.
 
     Statuses earlier in the pipeline are backfilled too, so a jump straight to
-    'received' still leaves a usable timeline.
+    'received' still leaves a usable timeline. `when` lets a status be
+    recorded for a date other than today, e.g. marking a shipment received a
+    few days after the fact.
     """
-    now = utcnow()
+    when = when or utcnow()
     for step in ORDER_STATUSES[: ORDER_STATUSES.index(status) + 1]:
         field = STATUS_TIMESTAMP_FIELD[step]
         if getattr(order, field) is None:
-            setattr(order, field, now)
+            setattr(order, field, when)
 
 
 async def get_or_404(db: AsyncSession, order_id: int) -> DressOrder:
@@ -86,11 +88,13 @@ async def update_order(
     changes = payload.model_dump(exclude_unset=True)
 
     new_status = changes.pop("status", None)
+    status_date = changes.pop("status_date", None)
     for field, value in changes.items():
         setattr(order, field, value)
     if new_status is not None:
         order.status = validate_status(new_status)
-        stamp_status(order, order.status)
+        when = datetime.combine(status_date, datetime.min.time()) if status_date else None
+        stamp_status(order, order.status, when=when)
 
     await db.commit()
     await db.refresh(order)

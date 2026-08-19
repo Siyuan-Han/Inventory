@@ -44,11 +44,16 @@ function detailToMessage(payload) {
 export const api = {
   statuses: () => request('/statuses'),
   stats: () => request('/stats'),
+  monthlyStats: (month) => request('/stats/monthly', { params: { month } }),
 
-  listDresses: (search) => request('/dresses', { params: { search } }),
+  listDresses: (search, archived = false) =>
+    request('/dresses', { params: { search, archived: archived ? 'true' : undefined } }),
+  nextDressCode: () => request('/dresses/next-code'),
   getDress: (id) => request(`/dresses/${id}`),
   createDress: (data) => request('/dresses', { method: 'POST', body: data }),
   updateDress: (id, data) => request(`/dresses/${id}`, { method: 'PUT', body: data }),
+  archiveDress: (id) => request(`/dresses/${id}/archive`, { method: 'POST' }),
+  restoreDress: (id) => request(`/dresses/${id}/restore`, { method: 'POST' }),
   deleteDress: (id) => request(`/dresses/${id}`, { method: 'DELETE' }),
 
   listOrders: (dressId) => request('/orders', { params: { dress_id: dressId } }),

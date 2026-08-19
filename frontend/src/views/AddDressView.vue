@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useInventoryStore } from '../stores/inventory'
+import PhotoDropzone from '../components/PhotoDropzone.vue'
 
 const props = defineProps({ id: { type: [String, Number], default: null } })
 const route = useRoute()
@@ -11,9 +12,10 @@ const store = useInventoryStore()
 const dressId = computed(() => (props.id ?? route.params.id) || null)
 const isEdit = computed(() => Boolean(dressId.value))
 const localError = ref(null)
+const previewCode = ref('')
 
 const form = reactive({
-  dress_code: '',
+  dress_code: '', // only used in edit mode; new dresses get a server-assigned code
   style_name: '',
   supplier: '',
   base_cost: '',
@@ -21,31 +23,29 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  if (!isEdit.value) return
-  const dress = await store.fetchDress(dressId.value).catch(() => null)
-  if (!dress) return
-  form.dress_code = dress.dress_code || ''
-  form.style_name = dress.style_name || ''
-  form.supplier = dress.supplier || ''
-  form.base_cost = dress.base_cost ?? ''
-  form.photo_url = dress.photo_url || ''
+  if (isEdit.value) {
+    const dress = await store.fetchDress(dressId.value).catch(() => null)
+    if (!dress) return
+    form.dress_code = dress.dress_code || ''
+    form.style_name = dress.style_name || ''
+    form.supplier = dress.supplier || ''
+    form.base_cost = dress.base_cost ?? ''
+    form.photo_url = dress.photo_url || ''
+  } else {
+    previewCode.value = await store.nextDressCode().catch(() => '')
+  }
 })
 
 async function submit() {
   localError.value = null
-  const code = form.dress_code.trim()
-  if (!code) {
-    localError.value = 'A dress code is required.'
-    return
-  }
 
   const payload = {
-    dress_code: code,
     style_name: form.style_name.trim() || null,
     supplier: form.supplier.trim() || null,
     base_cost: form.base_cost === '' ? null : Number(form.base_cost),
-    photo_url: form.photo_url.trim() || null,
+    photo_url: form.photo_url || null,
   }
+  if (isEdit.value) payload.dress_code = form.dress_code.trim()
 
   try {
     const dress = isEdit.value
@@ -65,16 +65,22 @@ async function submit() {
     </h1>
 
     <form class="space-y-4" @submit.prevent="submit">
-      <label class="block">
+      <label v-if="isEdit" class="block">
         <span class="text-sm text-stone-600">Dress code <span class="text-blush-600">*</span></span>
         <input
           v-model="form.dress_code"
           required
           maxlength="20"
-          placeholder="WD001"
           class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blush-300"
         />
       </label>
+      <div v-else class="block">
+        <span class="text-sm text-stone-600">Dress code</span>
+        <p class="mt-1 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-stone-600">
+          {{ previewCode || '…' }}
+          <span class="text-xs text-stone-400">(assigned automatically)</span>
+        </p>
+      </div>
 
       <label class="block">
         <span class="text-sm text-stone-600">Style name</span>
@@ -110,21 +116,11 @@ async function submit() {
       </div>
 
       <label class="block">
-        <span class="text-sm text-stone-600">Photo URL</span>
-        <input
-          v-model="form.photo_url"
-          type="url"
-          placeholder="https://…/dress-photos/wd001.jpg"
-          class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
-        />
-        <span class="mt-1 block text-xs text-stone-400">
-          Paste a public link, e.g. from the Supabase <code>dress-photos</code> bucket.
-        </span>
+        <span class="text-sm text-stone-600">Photo</span>
+        <div class="mt-1">
+          <PhotoDropzone v-model="form.photo_url" />
+        </div>
       </label>
-
-      <div v-if="form.photo_url" class="rounded-xl overflow-hidden border border-stone-200 w-32">
-        <img :src="form.photo_url" alt="Preview" class="w-full aspect-[3/4] object-cover" />
-      </div>
 
       <p v-if="localError" class="text-sm text-blush-700">{{ localError }}</p>
 

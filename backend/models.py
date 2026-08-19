@@ -18,6 +18,7 @@ class Dress(Base):
     supplier: Mapped[Optional[str]] = mapped_column(String(200))
     base_cost: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
     orders: Mapped[List["DressOrder"]] = relationship(
         back_populates="dress",

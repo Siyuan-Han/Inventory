@@ -11,6 +11,7 @@ const store = useInventoryStore()
 
 const badge = computed(() => {
   const d = props.dress
+  if (d.archived_at) return { text: 'Archived', tone: 'stone' }
   if (d.in_stock > 0) return { text: `${d.in_stock} in stock`, tone: 'emerald' }
   if (d.pending_orders > 0) return { text: store.statusLabel(d.latest_status), tone: 'amber' }
   if (d.total_sold > 0) return { text: 'Sold out', tone: 'stone' }
@@ -28,6 +29,7 @@ const toneClass = {
   <RouterLink
     :to="{ name: 'dress-detail', params: { id: dress.id } }"
     class="group rounded-xl border border-stone-200 bg-white overflow-hidden hover:border-blush-300 hover:shadow-sm transition"
+    :class="{ 'opacity-60': dress.archived_at }"
   >
     <div class="aspect-[3/4] bg-stone-100 flex items-center justify-center overflow-hidden">
       <img

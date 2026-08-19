@@ -6,8 +6,10 @@ export const useInventoryStore = defineStore('inventory', {
     dresses: [],
     dress: null, // the dress currently open in the detail view
     stats: null,
+    monthlyStats: null,
     statuses: [],
     search: '',
+    showArchived: false,
     loading: false,
     saving: false,
     error: null,
@@ -40,16 +42,29 @@ export const useInventoryStore = defineStore('inventory', {
       return this.statuses
     },
 
+    async nextDressCode() {
+      const { dress_code } = await api.nextDressCode()
+      return dress_code
+    },
+
     async fetchStats() {
       return this.run(async () => {
         this.stats = await api.stats()
       })
     },
 
-    async fetchDresses(search = this.search) {
-      this.search = search
+    async fetchMonthlyStats(month) {
       return this.run(async () => {
-        this.dresses = await api.listDresses(search)
+        this.monthlyStats = await api.monthlyStats(month)
+        return this.monthlyStats
+      })
+    },
+
+    async fetchDresses(search = this.search, archived = this.showArchived) {
+      this.search = search
+      this.showArchived = archived
+      return this.run(async () => {
+        this.dresses = await api.listDresses(search, archived)
       })
     },
 
@@ -84,6 +99,23 @@ export const useInventoryStore = defineStore('inventory', {
       }, { flag: 'saving' })
     },
 
+    async archiveDress(id) {
+      return this.run(async () => {
+        this.dress = await api.archiveDress(id)
+        // An archived dress drops out of whichever list is currently active.
+        this.dresses = this.dresses.filter((d) => d.id !== Number(id))
+        return this.dress
+      }, { flag: 'saving' })
+    },
+
+    async restoreDress(id) {
+      return this.run(async () => {
+        this.dress = await api.restoreDress(id)
+        this.dresses = this.dresses.filter((d) => d.id !== Number(id))
+        return this.dress
+      }, { flag: 'saving' })
+    },
+
     async createOrder(data) {
       return this.run(async () => {
         await api.createOrder(data)
@@ -91,9 +123,9 @@ export const useInventoryStore = defineStore('inventory', {
       }, { flag: 'saving' })
     },
 
-    async setOrderStatus(orderId, status, dressId) {
+    async setOrderStatus(orderId, status, dressId, statusDate) {
       return this.run(async () => {
-        await api.updateOrder(orderId, { status })
+        await api.updateOrder(orderId, { status, status_date: statusDate || undefined })
         await this.refreshDress(dressId)
       }, { flag: 'saving' })
     },

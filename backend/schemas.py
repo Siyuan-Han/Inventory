@@ -25,7 +25,7 @@ STATUS_TIMESTAMP_FIELD = {
 STATUS_LABELS = {
     "ordered": "Ordered",
     "shipped_from_factory": "Shipped from factory",
-    "arrived_shipping_center": "At shipping center",
+    "arrived_shipping_center": "Shipped from shipping center",
     "arrived_us": "Arrived in US",
     "received": "Received",
 }
@@ -39,7 +39,6 @@ class ORMModel(BaseModel):
 # Dress
 # --------------------------------------------------------------------------
 class DressBase(BaseModel):
-    dress_code: str = Field(min_length=1, max_length=20)
     style_name: Optional[str] = Field(default=None, max_length=200)
     photo_url: Optional[str] = None
     supplier: Optional[str] = Field(default=None, max_length=200)
@@ -47,7 +46,9 @@ class DressBase(BaseModel):
 
 
 class DressCreate(DressBase):
-    pass
+    # Left blank in the normal "Add dress" flow — the server assigns the next
+    # code. Still accepted so an import script or a correction can set one.
+    dress_code: Optional[str] = Field(default=None, min_length=1, max_length=20)
 
 
 class DressUpdate(BaseModel):
@@ -79,6 +80,9 @@ class OrderUpdate(BaseModel):
     quantity: Optional[int] = Field(default=None, ge=1)
     unit_cost: Optional[Decimal] = Field(default=None, ge=0)
     status: Optional[str] = None
+    # The date the new status was actually reached, when different from
+    # today (e.g. marking a shipment received a few days late).
+    status_date: Optional[date] = None
     notes: Optional[str] = None
     ordered_at: Optional[datetime] = None
     shipped_from_factory_at: Optional[datetime] = None
@@ -149,6 +153,7 @@ class DressRead(ORMModel):
     supplier: Optional[str] = None
     base_cost: Optional[Decimal] = None
     created_at: Optional[datetime] = None
+    archived_at: Optional[datetime] = None
 
     # Rollups computed by the router.
     total_ordered: int = 0
@@ -178,3 +183,17 @@ class DashboardStats(BaseModel):
     profit: Decimal = Decimal("0")
     cash_sales: int = 0
     status_breakdown: dict = {}
+
+
+class MonthlyStats(BaseModel):
+    month: str  # "YYYY-MM"
+    orders_count: int = 0
+    sales_count: int = 0
+    revenue: Decimal = Decimal("0")
+    cost: Decimal = Decimal("0")
+    profit: Decimal = Decimal("0")
+    cash_sales: int = 0
+
+
+class NextDressCode(BaseModel):
+    dress_code: str

@@ -83,7 +83,7 @@ async function submit() {
         >
           <option value="">Not linked to an order</option>
           <option v-for="order in orders" :key="order.id" :value="order.id">
-            #{{ order.id }} · {{ order.order_date }} · qty {{ order.quantity }}
+            {{ order.order_date }} · qty {{ order.quantity }}<template v-if="order.unit_cost"> · ${{ order.unit_cost }} each</template>
           </option>
         </select>
       </label>

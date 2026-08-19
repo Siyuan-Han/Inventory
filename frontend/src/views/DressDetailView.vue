@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useInventoryStore } from '../stores/inventory'
 import OrderForm from '../components/OrderForm.vue'
@@ -12,9 +12,12 @@ const store = useInventoryStore()
 
 const showOrderForm = ref(false)
 const showSaleForm = ref(false)
+// Per-order state for the inline "pick a date, then advance" prompt.
+const advancing = reactive({})
 
 const dress = computed(() => store.dress)
 const dressId = computed(() => Number(props.id ?? route.params.id))
+const today = () => new Date().toISOString().slice(0, 10)
 
 const money = (value) =>
   value === null || value === undefined || value === ''
@@ -39,13 +42,29 @@ function nextStatus(order) {
   return index >= 0 && index < store.statuses.length - 1 ? store.statuses[index + 1] : null
 }
 
-async function advance(order) {
+function orderLabel(orderId) {
+  const order = dress.value?.orders.find((o) => o.id === orderId)
+  return order ? `order from ${order.order_date}` : 'a linked order'
+}
+
+function openAdvance(order) {
+  advancing[order.id] = { date: today() }
+}
+
+function cancelAdvance(order) {
+  delete advancing[order.id]
+}
+
+async function confirmAdvance(order) {
   const next = nextStatus(order)
-  if (next) await store.setOrderStatus(order.id, next.value, dressId.value).catch(() => {})
+  const date = advancing[order.id]?.date
+  if (!next) return
+  await store.setOrderStatus(order.id, next.value, dressId.value, date).catch(() => {})
+  delete advancing[order.id]
 }
 
 async function removeOrder(order) {
-  if (!confirm(`Delete order #${order.id}?`)) return
+  if (!confirm(`Delete order from ${order.order_date}?`)) return
   await store.deleteOrder(order.id, dressId.value).catch(() => {})
 }
 
@@ -58,6 +77,15 @@ async function removeDress() {
   if (!confirm(`Delete ${dress.value.dress_code} and all its orders and sales?`)) return
   await store.deleteDress(dressId.value).catch(() => {})
   if (!store.error) router.push({ name: 'dresses' })
+}
+
+async function archiveDress() {
+  if (!confirm(`Archive ${dress.value.dress_code}? It will move out of the active dress list, but nothing is deleted.`)) return
+  await store.archiveDress(dressId.value).catch(() => {})
+}
+
+async function restoreDress() {
+  await store.restoreDress(dressId.value).catch(() => {})
 }
 
 async function load() {
@@ -74,6 +102,20 @@ watch(dressId, load)
     <RouterLink :to="{ name: 'dresses' }" class="text-sm text-stone-500 hover:text-stone-800">
       ← All dresses
     </RouterLink>
+
+    <p
+      v-if="dress.archived_at"
+      class="rounded-lg bg-stone-100 border border-stone-200 px-3 py-2 text-sm text-stone-600 flex items-center justify-between gap-2"
+    >
+      This dress is archived — it's hidden from the active list.
+      <button
+        class="shrink-0 rounded-lg border border-stone-300 bg-white px-3 py-1 text-sm hover:bg-stone-50"
+        :disabled="store.saving"
+        @click="restoreDress"
+      >
+        Restore
+      </button>
+    </p>
 
     <div class="grid sm:grid-cols-[200px_1fr] gap-5">
       <div class="aspect-[3/4] sm:aspect-auto sm:h-64 rounded-xl bg-stone-100 overflow-hidden flex items-center justify-center">
@@ -118,6 +160,14 @@ watch(dressId, load)
           >
             Edit
           </RouterLink>
+          <button
+            v-if="!dress.archived_at"
+            class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100"
+            :disabled="store.saving"
+            @click="archiveDress"
+          >
+            Archive
+          </button>
           <button
             class="rounded-lg border border-blush-300 text-blush-700 px-3 py-1.5 text-sm hover:bg-blush-50"
             @click="removeDress"
@@ -189,12 +239,35 @@ watch(dressId, load)
 
         <p v-if="order.notes" class="text-sm text-stone-600">{{ order.notes }}</p>
 
-        <div class="flex gap-2">
+        <div
+          v-if="advancing[order.id]"
+          class="flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 border border-stone-200 p-2"
+        >
+          <label class="text-sm text-stone-600">
+            {{ nextStatus(order).label }} on
+          </label>
+          <input
+            v-model="advancing[order.id].date"
+            type="date"
+            class="rounded-lg border border-stone-300 px-2 py-1 text-sm"
+          />
+          <button
+            :disabled="store.saving"
+            class="rounded-lg bg-blush-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+            @click="confirmAdvance(order)"
+          >
+            Confirm
+          </button>
+          <button class="rounded-lg px-3 py-1 text-sm text-stone-500" @click="cancelAdvance(order)">
+            Cancel
+          </button>
+        </div>
+        <div v-else class="flex gap-2">
           <button
             v-if="nextStatus(order)"
             :disabled="store.saving"
             class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100 disabled:opacity-50"
-            @click="advance(order)"
+            @click="openAdvance(order)"
           >
             Mark {{ nextStatus(order).label.toLowerCase() }}
           </button>
@@ -229,7 +302,7 @@ watch(dressId, load)
             <p class="text-sm">
               <span class="font-medium tabular-nums">{{ money(sale.sale_price) }}</span>
               <span class="text-stone-500"> · {{ sale.sale_date }}</span>
-              <span v-if="sale.order_id" class="text-stone-400"> · order #{{ sale.order_id }}</span>
+              <span v-if="sale.order_id" class="text-stone-400"> · {{ orderLabel(sale.order_id) }}</span>
             </p>
             <p v-if="sale.notes" class="text-xs text-stone-500 truncate">{{ sale.notes }}</p>
           </div>

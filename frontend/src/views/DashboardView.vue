@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useInventoryStore } from '../stores/inventory'
 
@@ -7,6 +7,26 @@ const store = useInventoryStore()
 
 const money = (value) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0))
+
+const now = new Date()
+const selectedMonth = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
+
+const monthLabel = computed(() => {
+  const [year, month] = selectedMonth.value.split('-').map(Number)
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+})
+
+const isCurrentMonth = computed(() => {
+  return selectedMonth.value === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+})
+
+function shiftMonth(delta) {
+  const [year, month] = selectedMonth.value.split('-').map(Number)
+  const d = new Date(year, month - 1 + delta, 1)
+  selectedMonth.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+watch(selectedMonth, (month) => store.fetchMonthlyStats(month).catch(() => {}), { immediate: true })
 
 const cards = computed(() => {
   const s = store.stats
@@ -83,6 +103,57 @@ onMounted(async () => {
           {{ money(store.stats?.profit) }}
         </p>
       </div>
+    </div>
+
+    <div class="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-medium text-stone-700">Monthly summary</h2>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="h-7 w-7 rounded-full border border-stone-300 text-stone-600 hover:bg-stone-100"
+            @click="shiftMonth(-1)"
+          >
+            ‹
+          </button>
+          <span class="w-32 text-center text-sm text-stone-700">{{ monthLabel }}</span>
+          <button
+            type="button"
+            class="h-7 w-7 rounded-full border border-stone-300 text-stone-600 hover:bg-stone-100 disabled:opacity-30"
+            :disabled="isCurrentMonth"
+            @click="shiftMonth(1)"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <p class="text-xs uppercase tracking-wide text-stone-500">Revenue</p>
+          <p class="mt-1 text-xl font-semibold tabular-nums">
+            {{ money(store.monthlyStats?.revenue) }}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-stone-500">Cost</p>
+          <p class="mt-1 text-xl font-semibold tabular-nums">
+            {{ money(store.monthlyStats?.cost) }}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-stone-500">Profit</p>
+          <p
+            class="mt-1 text-xl font-semibold tabular-nums"
+            :class="Number(store.monthlyStats?.profit || 0) < 0 ? 'text-blush-700' : 'text-emerald-700'"
+          >
+            {{ money(store.monthlyStats?.profit) }}
+          </p>
+        </div>
+      </div>
+      <p class="text-xs text-stone-400">
+        {{ store.monthlyStats?.sales_count ?? 0 }} sale(s) · {{ store.monthlyStats?.orders_count ?? 0 }} order(s) placed
+      </p>
     </div>
 
     <div class="rounded-xl border border-stone-200 bg-white p-4">

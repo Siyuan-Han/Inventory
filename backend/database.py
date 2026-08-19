@@ -1,5 +1,6 @@
 from typing import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -35,6 +36,15 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Create any missing tables. Existing tables are left untouched."""
+    """Create any missing tables, then apply small additive schema patches.
+
+    `create_all` only adds whole tables, so columns added to models.py after
+    a table already exists (like `dress.archived_at`) need an explicit patch
+    here. Each statement is safe to run every time the app starts.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if engine.dialect.name == "postgresql":
+            await conn.execute(
+                text("ALTER TABLE dress ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP")
+            )

@@ -1,3 +1,5 @@
+import re
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,9 +11,27 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from models import Dress, DressOrder, Sale
 from rollups import dress_rollup
-from schemas import DressCreate, DressDetail, DressRead, DressUpdate
+from schemas import DressCreate, DressDetail, DressRead, DressUpdate, NextDressCode
 
 router = APIRouter(prefix="/dresses", tags=["dresses"])
+
+CODE_PREFIX = "WD"
+CODE_PATTERN = re.compile(rf"^{CODE_PREFIX}(\d+)$")
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+async def next_code(db: AsyncSession) -> str:
+    """The next sequential WDxxx code, based on the highest one in use."""
+    codes = (await db.scalars(select(Dress.dress_code))).all()
+    highest = 0
+    for code in codes:
+        match = CODE_PATTERN.match(code or "")
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return f"{CODE_PREFIX}{highest + 1:03d}"
 
 
 def to_read(dress: Dress) -> DressRead:
@@ -40,16 +60,24 @@ async def load_dress(db: AsyncSession, dress_id: int) -> Dress:
     return dress
 
 
+@router.get("/next-code", response_model=NextDressCode)
+async def preview_next_code(db: AsyncSession = Depends(get_db)) -> NextDressCode:
+    """A preview of the code the next dress will get. Not reserved."""
+    return NextDressCode(dress_code=await next_code(db))
+
+
 @router.get("", response_model=List[DressRead])
 async def list_dresses(
     db: AsyncSession = Depends(get_db),
     search: Optional[str] = Query(default=None, description="Match code, style or supplier"),
+    archived: bool = Query(default=False, description="List archived dresses instead of active ones"),
 ) -> List[DressRead]:
     stmt = (
         select(Dress)
         .options(selectinload(Dress.orders), selectinload(Dress.sales))
         .order_by(Dress.dress_code)
     )
+    stmt = stmt.where(Dress.archived_at.isnot(None) if archived else Dress.archived_at.is_(None))
     if search and search.strip():
         pattern = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -64,15 +92,26 @@ async def list_dresses(
 
 @router.post("", response_model=DressDetail, status_code=201)
 async def create_dress(payload: DressCreate, db: AsyncSession = Depends(get_db)) -> DressDetail:
-    dress = Dress(**payload.model_dump())
-    db.add(dress)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=409, detail=f"Dress code '{payload.dress_code}' already exists"
-        )
+    data = payload.model_dump()
+
+    # Retry a handful of times in case two people add a dress at once and
+    # both compute the same "next" code before either commits.
+    for attempt in range(5):
+        data["dress_code"] = payload.dress_code or await next_code(db)
+        dress = Dress(**data)
+        db.add(dress)
+        try:
+            await db.commit()
+            break
+        except IntegrityError:
+            await db.rollback()
+            if payload.dress_code:
+                raise HTTPException(
+                    status_code=409, detail=f"Dress code '{payload.dress_code}' already exists"
+                )
+    else:
+        raise HTTPException(status_code=500, detail="Could not assign a dress code, try again")
+
     return to_detail(await load_dress(db, dress.id))
 
 
@@ -93,6 +132,23 @@ async def update_dress(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=409, detail="That dress code is already taken")
+    return to_detail(await load_dress(db, dress_id))
+
+
+@router.post("/{dress_id}/archive", response_model=DressDetail)
+async def archive_dress(dress_id: int, db: AsyncSession = Depends(get_db)) -> DressDetail:
+    dress = await load_dress(db, dress_id)
+    if dress.archived_at is None:
+        dress.archived_at = utcnow()
+        await db.commit()
+    return to_detail(await load_dress(db, dress_id))
+
+
+@router.post("/{dress_id}/restore", response_model=DressDetail)
+async def restore_dress(dress_id: int, db: AsyncSession = Depends(get_db)) -> DressDetail:
+    dress = await load_dress(db, dress_id)
+    dress.archived_at = None
+    await db.commit()
     return to_detail(await load_dress(db, dress_id))
 
 

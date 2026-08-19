@@ -18,7 +18,7 @@ import { useInventoryStore } from '../stores/inventory'
 const STATUSES = [
   { value: 'ordered', label: 'Ordered', field: 'ordered_at' },
   { value: 'shipped_from_factory', label: 'Shipped from factory', field: 'shipped_from_factory_at' },
-  { value: 'arrived_shipping_center', label: 'At shipping center', field: 'arrived_shipping_center_at' },
+  { value: 'arrived_shipping_center', label: 'Shipped from shipping center', field: 'arrived_shipping_center_at' },
   { value: 'arrived_us', label: 'Arrived in US', field: 'arrived_us_at' },
   { value: 'received', label: 'Received', field: 'received_at' },
 ]
@@ -58,6 +58,7 @@ const DRESS = {
   supplier: 'Shanghai Factory',
   base_cost: '150.00',
   created_at: '2026-08-01T10:00:00',
+  archived_at: null,
   total_ordered: 2,
   total_received: 0,
   total_sold: 1,
@@ -90,14 +91,28 @@ const STATS = {
   },
 }
 
+const MONTHLY_STATS = {
+  month: '2026-08',
+  orders_count: 1,
+  sales_count: 1,
+  revenue: '400.00',
+  cost: '150.00',
+  profit: '250.00',
+  cash_sales: 1,
+}
+
 vi.mock('../api', () => {
   const api = {
     statuses: vi.fn(async () => STATUSES),
     stats: vi.fn(async () => STATS),
+    monthlyStats: vi.fn(async () => MONTHLY_STATS),
     listDresses: vi.fn(async () => [DRESS]),
+    nextDressCode: vi.fn(async () => ({ dress_code: 'WD002' })),
     getDress: vi.fn(async () => DRESS),
     createDress: vi.fn(async () => DRESS),
     updateDress: vi.fn(async () => DRESS),
+    archiveDress: vi.fn(async () => ({ ...DRESS, archived_at: '2026-08-19T10:00:00' })),
+    restoreDress: vi.fn(async () => ({ ...DRESS, archived_at: null })),
     deleteDress: vi.fn(async () => null),
     listOrders: vi.fn(async () => [ORDER]),
     createOrder: vi.fn(async () => ORDER),
@@ -147,18 +162,25 @@ describe('views and components render', () => {
     expect(wrapper.text()).toContain('Dashboard')
   })
 
-  it('Dashboard shows stat cards and the pipeline', async () => {
+  it('Dashboard shows stat cards, the pipeline and the monthly summary', async () => {
     const wrapper = await mountWith(DashboardView)
     expect(wrapper.text()).toContain('Dresses')
-    expect(wrapper.text()).toContain('$400.00') // revenue
-    expect(wrapper.text()).toContain('$250.00') // profit
+    expect(wrapper.text()).toContain('$400.00') // all-time revenue
+    expect(wrapper.text()).toContain('$250.00') // all-time profit
     expect(wrapper.text()).toContain('Arrived in US')
+    expect(wrapper.text()).toContain('Monthly summary')
+    expect(wrapper.text()).toContain('1 sale(s)')
   })
 
-  it('Dress list renders a card per dress', async () => {
+  it('Dress list renders a card per dress and toggles archived', async () => {
     const wrapper = await mountWith(DressListView)
     expect(wrapper.findAllComponents(DressCard)).toHaveLength(1)
     expect(wrapper.text()).toContain('WD001')
+
+    const { api } = await import('../api')
+    await wrapper.findAll('button').find((b) => b.text() === 'Archived').trigger('click')
+    await flushPromises()
+    expect(api.listDresses).toHaveBeenLastCalledWith('', true)
   })
 
   it('Dress detail renders the order timeline and sales', async () => {
@@ -171,6 +193,38 @@ describe('views and components render', () => {
     // The next unreached stage is offered as an action.
     expect(wrapper.text()).toContain('Mark received')
     expect(wrapper.text()).toContain('Cash')
+    // No raw order id leaks into the sales list.
+    expect(wrapper.text()).not.toContain('#1')
+  })
+
+  it('Dress detail asks for a date before advancing an order status', async () => {
+    const wrapper = await mountWith(DressDetailView, {
+      props: { id: '1' },
+      route: '/dresses/1',
+    })
+    const { api } = await import('../api')
+    await wrapper.findAll('button').find((b) => b.text() === 'Mark received').trigger('click')
+    expect(wrapper.find('input[type="date"]').exists()).toBe(true)
+
+    await wrapper.findAll('button').find((b) => b.text() === 'Confirm').trigger('click')
+    await flushPromises()
+    expect(api.updateOrder).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ status: 'received', status_date: expect.any(String) }),
+    )
+  })
+
+  it('Dress detail can archive a dress', async () => {
+    const wrapper = await mountWith(DressDetailView, {
+      props: { id: '1' },
+      route: '/dresses/1',
+    })
+    const { api } = await import('../api')
+    // stub the confirm() dialog
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await wrapper.findAll('button').find((b) => b.text() === 'Archive').trigger('click')
+    await flushPromises()
+    expect(api.archiveDress).toHaveBeenCalledWith(1)
   })
 
   it('Dress detail opens the order and sale modals', async () => {
@@ -186,11 +240,22 @@ describe('views and components render', () => {
     expect(wrapper.findComponent(SaleForm).exists()).toBe(true)
   })
 
-  it('Add dress form validates a missing code', async () => {
+  it('SaleForm order options omit the raw order id', async () => {
+    const wrapper = mount(SaleForm, {
+      props: { dressId: 1, orders: [ORDER] },
+      global: { plugins: [createPinia()] },
+    })
+    const optionText = wrapper.find('option[value="1"]').text()
+    expect(optionText).not.toContain('#1')
+    expect(optionText).toContain('2026-08-19')
+  })
+
+  it('Add dress form shows a server-assigned code and does not require typing one', async () => {
     const wrapper = await mountWith(AddDressView, { route: '/dresses/new' })
-    await wrapper.find('form').trigger('submit')
-    await flushPromises()
-    expect(wrapper.text()).toContain('A dress code is required.')
+    expect(wrapper.text()).toContain('WD002')
+    expect(wrapper.text()).toContain('assigned automatically')
+    // No dress-code text input in the add flow.
+    expect(wrapper.find('input[required]').exists()).toBe(false)
   })
 
   it('Edit dress prefills from the API', async () => {
@@ -220,5 +285,12 @@ describe('inventory store', () => {
     await store.loadStatuses()
     expect(store.statusLabel('arrived_us')).toBe('Arrived in US')
     expect(store.statusIndex('received')).toBe(4)
+  })
+
+  it('archiving a dress drops it from the currently loaded list', async () => {
+    const store = useInventoryStore()
+    store.dresses = [DRESS]
+    await store.archiveDress(1)
+    expect(store.dresses).toHaveLength(0)
   })
 })
