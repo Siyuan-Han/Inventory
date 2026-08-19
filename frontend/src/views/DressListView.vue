@@ -10,22 +10,42 @@ const router = useRouter()
 
 const query = ref(store.search)
 const archived = computed(() => route.query.archived === 'true')
+const supplier = computed(() => route.query.supplier || '')
+const notReceived = computed(() => route.query.not_received === 'true')
+const hasFilters = computed(() => Boolean(supplier.value || notReceived.value))
 let debounce
 
-watch(query, (value) => {
+function currentFilters() {
+  return { search: query.value, archived: archived.value, supplier: supplier.value, notReceived: notReceived.value }
+}
+
+watch(query, () => {
   clearTimeout(debounce)
-  debounce = setTimeout(() => store.fetchDresses(value, archived.value).catch(() => {}), 250)
+  debounce = setTimeout(() => store.fetchDresses(currentFilters()).catch(() => {}), 250)
 })
 
-watch(archived, (value) => store.fetchDresses(query.value, value).catch(() => {}))
+watch([archived, supplier, notReceived], () => store.fetchDresses(currentFilters()).catch(() => {}))
 
 function toggleArchived(value) {
-  router.push({ name: 'dresses', query: value ? { archived: 'true' } : {} })
+  router.push({ name: 'dresses', query: { ...route.query, archived: value ? 'true' : undefined } })
+}
+
+function setSupplier(value) {
+  router.push({ name: 'dresses', query: { ...route.query, supplier: value || undefined } })
+}
+
+function toggleNotReceived(value) {
+  router.push({ name: 'dresses', query: { ...route.query, not_received: value ? 'true' : undefined } })
+}
+
+function clearFilters() {
+  router.push({ name: 'dresses', query: { archived: route.query.archived } })
 }
 
 onMounted(async () => {
   await store.loadStatuses().catch(() => {})
-  await store.fetchDresses(query.value, archived.value).catch(() => {})
+  await store.fetchSuppliers().catch(() => {})
+  await store.fetchDresses(currentFilters()).catch(() => {})
 })
 </script>
 
@@ -73,6 +93,36 @@ onMounted(async () => {
       class="w-full rounded-lg border border-stone-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blush-300"
     />
 
+    <div class="flex flex-wrap items-center gap-2">
+      <select
+        :value="supplier"
+        class="rounded-lg border border-stone-300 px-3 py-2 text-sm bg-white"
+        @change="setSupplier($event.target.value)"
+      >
+        <option value="">All suppliers</option>
+        <option v-for="s in store.suppliers" :key="s" :value="s">{{ s }}</option>
+      </select>
+
+      <label class="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm bg-white cursor-pointer">
+        <input
+          type="checkbox"
+          :checked="notReceived"
+          class="h-4 w-4 rounded border-stone-300 accent-blush-600"
+          @change="toggleNotReceived($event.target.checked)"
+        />
+        Not yet received
+      </label>
+
+      <button
+        v-if="hasFilters"
+        type="button"
+        class="text-sm text-stone-500 underline"
+        @click="clearFilters"
+      >
+        Clear filters
+      </button>
+    </div>
+
     <p v-if="store.loading && !store.dresses.length" class="text-sm text-stone-500">Loading…</p>
 
     <div
@@ -80,10 +130,10 @@ onMounted(async () => {
       class="rounded-xl border border-dashed border-stone-300 p-10 text-center"
     >
       <p class="text-stone-500">
-        {{ query ? 'No dresses match that search.' : archived ? 'No archived dresses.' : 'No dresses yet.' }}
+        {{ query || hasFilters ? 'No dresses match these filters.' : archived ? 'No archived dresses.' : 'No dresses yet.' }}
       </p>
       <RouterLink
-        v-if="!query && !archived"
+        v-if="!query && !archived && !hasFilters"
         :to="{ name: 'dress-new' }"
         class="mt-3 inline-block text-sm text-blush-700 underline"
       >

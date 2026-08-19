@@ -47,6 +47,21 @@ function orderLabel(orderId) {
   return order ? `order from ${order.order_date}` : 'a linked order'
 }
 
+/** How a sale was paid: fully cash, fully card, or a cash/card split. */
+function payment(sale) {
+  const price = Number(sale.sale_price) || 0
+  if (sale.cash_amount === null || sale.cash_amount === undefined) {
+    return sale.is_cash
+      ? { label: 'Cash', tone: 'emerald' }
+      : { label: 'Card', tone: 'stone' }
+  }
+  const cash = Number(sale.cash_amount)
+  const card = Math.max(0, price - cash)
+  if (cash <= 0) return { label: 'Card', tone: 'stone' }
+  if (card <= 0) return { label: 'Cash', tone: 'emerald' }
+  return { label: `${money(cash)} cash + ${money(card)} card`, tone: 'amber' }
+}
+
 function openAdvance(order) {
   advancing[order.id] = { date: today() }
 }
@@ -308,9 +323,13 @@ watch(dressId, load)
           </div>
           <span
             class="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
-            :class="sale.is_cash ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-100 text-stone-600'"
+            :class="{
+              emerald: 'bg-emerald-50 text-emerald-700',
+              stone: 'bg-stone-100 text-stone-600',
+              amber: 'bg-amber-50 text-amber-700',
+            }[payment(sale).tone]"
           >
-            {{ sale.is_cash ? 'Cash' : 'Card' }}
+            {{ payment(sale).label }}
           </span>
           <button
             :disabled="store.saving"

@@ -66,11 +66,27 @@ async def preview_next_code(db: AsyncSession = Depends(get_db)) -> NextDressCode
     return NextDressCode(dress_code=await next_code(db))
 
 
+@router.get("/suppliers", response_model=List[str])
+async def list_suppliers(db: AsyncSession = Depends(get_db)) -> List[str]:
+    """Distinct supplier names in use, for populating a filter dropdown."""
+    stmt = (
+        select(Dress.supplier)
+        .where(Dress.supplier.isnot(None), Dress.supplier != "")
+        .distinct()
+        .order_by(Dress.supplier)
+    )
+    return list((await db.scalars(stmt)).all())
+
+
 @router.get("", response_model=List[DressRead])
 async def list_dresses(
     db: AsyncSession = Depends(get_db),
     search: Optional[str] = Query(default=None, description="Match code, style or supplier"),
     archived: bool = Query(default=False, description="List archived dresses instead of active ones"),
+    supplier: Optional[str] = Query(default=None, description="Exact supplier match"),
+    not_received: bool = Query(
+        default=False, description="Only dresses with at least one order not yet received"
+    ),
 ) -> List[DressRead]:
     stmt = (
         select(Dress)
@@ -78,6 +94,8 @@ async def list_dresses(
         .order_by(Dress.dress_code)
     )
     stmt = stmt.where(Dress.archived_at.isnot(None) if archived else Dress.archived_at.is_(None))
+    if supplier:
+        stmt = stmt.where(Dress.supplier == supplier)
     if search and search.strip():
         pattern = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -87,7 +105,10 @@ async def list_dresses(
                 Dress.supplier.ilike(pattern),
             )
         )
-    return [to_read(d) for d in (await db.scalars(stmt)).all()]
+    results = [to_read(d) for d in (await db.scalars(stmt)).all()]
+    if not_received:
+        results = [d for d in results if d.pending_orders > 0]
+    return results
 
 
 @router.post("", response_model=DressDetail, status_code=201)

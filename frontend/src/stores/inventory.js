@@ -8,8 +8,11 @@ export const useInventoryStore = defineStore('inventory', {
     stats: null,
     monthlyStats: null,
     statuses: [],
+    suppliers: [],
     search: '',
     showArchived: false,
+    supplierFilter: '',
+    notReceivedOnly: false,
     loading: false,
     saving: false,
     error: null,
@@ -47,6 +50,11 @@ export const useInventoryStore = defineStore('inventory', {
       return dress_code
     },
 
+    async fetchSuppliers() {
+      this.suppliers = await api.suppliers()
+      return this.suppliers
+    },
+
     async fetchStats() {
       return this.run(async () => {
         this.stats = await api.stats()
@@ -60,11 +68,19 @@ export const useInventoryStore = defineStore('inventory', {
       })
     },
 
-    async fetchDresses(search = this.search, archived = this.showArchived) {
+    async fetchDresses(filters = {}) {
+      const {
+        search = this.search,
+        archived = this.showArchived,
+        supplier = this.supplierFilter,
+        notReceived = this.notReceivedOnly,
+      } = filters
       this.search = search
       this.showArchived = archived
+      this.supplierFilter = supplier
+      this.notReceivedOnly = notReceived
       return this.run(async () => {
-        this.dresses = await api.listDresses(search, archived)
+        this.dresses = await api.listDresses({ search, archived, supplier, notReceived })
       })
     },
 

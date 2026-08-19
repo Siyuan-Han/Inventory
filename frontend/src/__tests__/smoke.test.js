@@ -46,8 +46,21 @@ const SALE = {
   sale_date: '2026-08-18',
   sale_price: '400.00',
   is_cash: true,
+  cash_amount: null,
   notes: null,
   created_at: '2026-08-18T10:00:00',
+}
+
+const SPLIT_SALE = {
+  id: 2,
+  dress_id: 1,
+  order_id: null,
+  sale_date: '2026-08-19',
+  sale_price: '200.00',
+  is_cash: false,
+  cash_amount: '120.00',
+  notes: null,
+  created_at: '2026-08-19T10:00:00',
 }
 
 const DRESS = {
@@ -68,20 +81,22 @@ const DRESS = {
   total_cost: '150.00',
   latest_status: 'arrived_us',
   orders: [ORDER],
-  sales: [SALE],
+  sales: [SALE, SPLIT_SALE],
 }
 
 const STATS = {
   total_dresses: 1,
   total_ordered: 2,
   total_received: 0,
-  total_sold: 1,
+  total_sold: 2,
   in_stock: 0,
   pending_orders: 1,
-  total_revenue: '400.00',
+  total_revenue: '600.00',
   total_cost: '150.00',
-  profit: '250.00',
+  profit: '450.00',
   cash_sales: 1,
+  cash_revenue: '520.00',
+  card_revenue: '80.00',
   status_breakdown: {
     ordered: 0,
     shipped_from_factory: 0,
@@ -94,11 +109,13 @@ const STATS = {
 const MONTHLY_STATS = {
   month: '2026-08',
   orders_count: 1,
-  sales_count: 1,
-  revenue: '400.00',
+  sales_count: 2,
+  revenue: '600.00',
   cost: '150.00',
-  profit: '250.00',
+  profit: '450.00',
   cash_sales: 1,
+  cash_revenue: '520.00',
+  card_revenue: '80.00',
 }
 
 vi.mock('../api', () => {
@@ -108,6 +125,7 @@ vi.mock('../api', () => {
     monthlyStats: vi.fn(async () => MONTHLY_STATS),
     listDresses: vi.fn(async () => [DRESS]),
     nextDressCode: vi.fn(async () => ({ dress_code: 'WD002' })),
+    suppliers: vi.fn(async () => ['Shanghai Factory', 'Beijing Silks']),
     getDress: vi.fn(async () => DRESS),
     createDress: vi.fn(async () => DRESS),
     updateDress: vi.fn(async () => DRESS),
@@ -162,14 +180,20 @@ describe('views and components render', () => {
     expect(wrapper.text()).toContain('Dashboard')
   })
 
-  it('Dashboard shows stat cards, the pipeline and the monthly summary', async () => {
+  it('Dashboard shows stat cards, cash/card revenue, the pipeline and a month dropdown', async () => {
     const wrapper = await mountWith(DashboardView)
     expect(wrapper.text()).toContain('Dresses')
-    expect(wrapper.text()).toContain('$400.00') // all-time revenue
-    expect(wrapper.text()).toContain('$250.00') // all-time profit
+    expect(wrapper.text()).toContain('$600.00') // all-time revenue
+    expect(wrapper.text()).toContain('$450.00') // all-time profit
+    expect(wrapper.text()).toContain('Revenue by payment')
+    expect(wrapper.text()).toContain('$520.00') // cash
+    expect(wrapper.text()).toContain('$80.00') // card
     expect(wrapper.text()).toContain('Arrived in US')
     expect(wrapper.text()).toContain('Monthly summary')
-    expect(wrapper.text()).toContain('1 sale(s)')
+    expect(wrapper.text()).toContain('2 sale(s)')
+    // Month picker is a dropdown, not prev/next arrows.
+    const select = wrapper.findAll('select').at(-1)
+    expect(select.findAll('option').length).toBeGreaterThan(1)
   })
 
   it('Dress list renders a card per dress and toggles archived', async () => {
@@ -180,10 +204,29 @@ describe('views and components render', () => {
     const { api } = await import('../api')
     await wrapper.findAll('button').find((b) => b.text() === 'Archived').trigger('click')
     await flushPromises()
-    expect(api.listDresses).toHaveBeenLastCalledWith('', true)
+    expect(api.listDresses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ archived: true }),
+    )
   })
 
-  it('Dress detail renders the order timeline and sales', async () => {
+  it('Dress list filters by supplier and by not-yet-received', async () => {
+    const wrapper = await mountWith(DressListView)
+    const { api } = await import('../api')
+
+    await wrapper.find('select').setValue('Shanghai Factory')
+    await flushPromises()
+    expect(api.listDresses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ supplier: 'Shanghai Factory' }),
+    )
+
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+    expect(api.listDresses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ notReceived: true }),
+    )
+  })
+
+  it('Dress detail renders the order timeline and sales, including a split payment', async () => {
     const wrapper = await mountWith(DressDetailView, {
       props: { id: '1' },
       route: '/dresses/1',
@@ -193,6 +236,8 @@ describe('views and components render', () => {
     // The next unreached stage is offered as an action.
     expect(wrapper.text()).toContain('Mark received')
     expect(wrapper.text()).toContain('Cash')
+    // The split sale shows both portions, not just one badge.
+    expect(wrapper.text()).toContain('$120.00 cash + $80.00 card')
     // No raw order id leaks into the sales list.
     expect(wrapper.text()).not.toContain('#1')
   })
@@ -248,6 +293,29 @@ describe('views and components render', () => {
     const optionText = wrapper.find('option[value="1"]').text()
     expect(optionText).not.toContain('#1')
     expect(optionText).toContain('2026-08-19')
+  })
+
+  it('SaleForm records a split cash/card payment', async () => {
+    const wrapper = mount(SaleForm, {
+      props: { dressId: 1, orders: [] },
+      global: { plugins: [createPinia()] },
+    })
+    const { api } = await import('../api')
+
+    await wrapper.find('input[type="date"]').setValue('2026-08-19')
+    const [priceInput] = wrapper.findAll('input[type="number"]')
+    await priceInput.setValue('200')
+
+    await wrapper.findAll('button').find((b) => b.text() === 'Split').trigger('click')
+    const cashInput = wrapper.findAll('input[type="number"]').at(-1)
+    await cashInput.setValue('120')
+    expect(wrapper.text()).toContain('$80.00 card')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(api.createSale).toHaveBeenCalledWith(
+      expect.objectContaining({ sale_price: 200, cash_amount: 120 }),
+    )
   })
 
   it('Add dress form shows a server-assigned code and does not require typing one', async () => {

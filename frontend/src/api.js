@@ -46,9 +46,17 @@ export const api = {
   stats: () => request('/stats'),
   monthlyStats: (month) => request('/stats/monthly', { params: { month } }),
 
-  listDresses: (search, archived = false) =>
-    request('/dresses', { params: { search, archived: archived ? 'true' : undefined } }),
+  listDresses: ({ search, archived = false, supplier, notReceived = false } = {}) =>
+    request('/dresses', {
+      params: {
+        search,
+        archived: archived ? 'true' : undefined,
+        supplier,
+        not_received: notReceived ? 'true' : undefined,
+      },
+    }),
   nextDressCode: () => request('/dresses/next-code'),
+  suppliers: () => request('/dresses/suppliers'),
   getDress: (id) => request(`/dresses/${id}`),
   createDress: (data) => request('/dresses', { method: 'POST', body: data }),
   updateDress: (id, data) => request(`/dresses/${id}`, { method: 'PUT', body: data }),

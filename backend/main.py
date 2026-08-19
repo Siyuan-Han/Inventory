@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from config import settings
 from database import get_db, init_db
 from models import Dress
-from rollups import dress_rollup
+from rollups import dress_rollup, sale_payment_split
 from routers import dresses, orders, sales
 from schemas import (
     ORDER_STATUSES,
@@ -77,28 +77,35 @@ async def statuses() -> list:
 
 @app.get("/stats", response_model=DashboardStats, tags=["meta"])
 async def stats(db: AsyncSession = Depends(get_db)) -> DashboardStats:
-    stmt = (
-        select(Dress)
-        .options(selectinload(Dress.orders), selectinload(Dress.sales))
-        .where(Dress.archived_at.is_(None))
-    )
+    # Financial totals (revenue/cost/profit/cash vs card) are permanent
+    # history and include archived dresses; inventory-workload figures
+    # (pending orders, in stock, the stage breakdown) reflect active
+    # dresses only, since that's the current work.
+    stmt = select(Dress).options(selectinload(Dress.orders), selectinload(Dress.sales))
     all_dresses = (await db.scalars(stmt)).all()
 
-    totals = DashboardStats(total_dresses=len(all_dresses))
+    totals = DashboardStats()
     breakdown: Counter = Counter()
 
     for dress in all_dresses:
         roll = dress_rollup(dress)
-        totals.total_ordered += roll["total_ordered"]
-        totals.total_received += roll["total_received"]
         totals.total_sold += roll["total_sold"]
-        totals.in_stock += roll["in_stock"]
-        totals.pending_orders += roll["pending_orders"]
         totals.total_revenue += roll["total_revenue"]
         totals.total_cost += roll["total_cost"]
-        totals.cash_sales += sum(1 for s in dress.sales if s.is_cash)
-        for order in dress.orders:
-            breakdown[order.status or "ordered"] += 1
+        for sale in dress.sales:
+            cash, card = sale_payment_split(sale)
+            totals.cash_revenue += cash
+            totals.card_revenue += card
+            totals.cash_sales += 1 if sale.is_cash else 0
+
+        if dress.archived_at is None:
+            totals.total_dresses += 1
+            totals.total_ordered += roll["total_ordered"]
+            totals.total_received += roll["total_received"]
+            totals.in_stock += roll["in_stock"]
+            totals.pending_orders += roll["pending_orders"]
+            for order in dress.orders:
+                breakdown[order.status or "ordered"] += 1
 
     totals.profit = totals.total_revenue - totals.total_cost
     totals.status_breakdown = {s: breakdown.get(s, 0) for s in ORDER_STATUSES}
@@ -135,6 +142,9 @@ async def monthly_stats(
                 result.sales_count += 1
                 result.revenue += sale.sale_price or 0
                 result.cash_sales += 1 if sale.is_cash else 0
+                cash, card = sale_payment_split(sale)
+                result.cash_revenue += cash
+                result.card_revenue += card
         for order in dress.orders:
             if start <= order.order_date < end:
                 result.orders_count += 1

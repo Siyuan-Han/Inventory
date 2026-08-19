@@ -116,6 +116,9 @@ class SaleBase(BaseModel):
     sale_date: date
     sale_price: Optional[Decimal] = Field(default=None, ge=0)
     is_cash: bool = False
+    # How much of sale_price was cash; the remainder is card. Omit for a
+    # sale that's simply all-cash (is_cash=true) or all-card (is_cash=false).
+    cash_amount: Optional[Decimal] = Field(default=None, ge=0)
     notes: Optional[str] = None
 
 
@@ -128,6 +131,7 @@ class SaleUpdate(BaseModel):
     sale_date: Optional[date] = None
     sale_price: Optional[Decimal] = Field(default=None, ge=0)
     is_cash: Optional[bool] = None
+    cash_amount: Optional[Decimal] = Field(default=None, ge=0)
     notes: Optional[str] = None
 
 
@@ -138,6 +142,7 @@ class SaleRead(ORMModel):
     sale_date: date
     sale_price: Optional[Decimal] = None
     is_cash: Optional[bool] = None
+    cash_amount: Optional[Decimal] = None
     notes: Optional[str] = None
     created_at: Optional[datetime] = None
 
@@ -182,6 +187,8 @@ class DashboardStats(BaseModel):
     total_cost: Decimal = Decimal("0")
     profit: Decimal = Decimal("0")
     cash_sales: int = 0
+    cash_revenue: Decimal = Decimal("0")
+    card_revenue: Decimal = Decimal("0")
     status_breakdown: dict = {}
 
 
@@ -193,6 +200,8 @@ class MonthlyStats(BaseModel):
     cost: Decimal = Decimal("0")
     profit: Decimal = Decimal("0")
     cash_sales: int = 0
+    cash_revenue: Decimal = Decimal("0")
+    card_revenue: Decimal = Decimal("0")
 
 
 class NextDressCode(BaseModel):

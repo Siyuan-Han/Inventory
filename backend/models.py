@@ -20,16 +20,19 @@ class Dress(Base):
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
     archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
+    # `.id.desc()` breaks ties when two rows share the same date — without it,
+    # two orders placed the same day sort in an arbitrary, storage-dependent
+    # order, which made the "latest status" badge look stuck.
     orders: Mapped[List["DressOrder"]] = relationship(
         back_populates="dress",
         cascade="all, delete-orphan",
-        order_by="DressOrder.order_date.desc()",
+        order_by="DressOrder.order_date.desc(), DressOrder.id.desc()",
         lazy="selectin",
     )
     sales: Mapped[List["Sale"]] = relationship(
         back_populates="dress",
         cascade="all, delete-orphan",
-        order_by="Sale.sale_date.desc()",
+        order_by="Sale.sale_date.desc(), Sale.id.desc()",
         lazy="selectin",
     )
 
@@ -72,6 +75,9 @@ class Sale(Base):
     is_cash: Mapped[Optional[bool]] = mapped_column(
         Boolean, default=False, server_default="false"
     )
+    # How much of sale_price was paid in cash; the rest is card. Null means
+    # "not split" — go by is_cash instead (kept for older rows/simple sales).
+    cash_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
 

@@ -9,22 +9,17 @@ const money = (value) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value || 0))
 
 const now = new Date()
-const selectedMonth = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
+const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+const selectedMonth = ref(currentMonth)
 
-const monthLabel = computed(() => {
-  const [year, month] = selectedMonth.value.split('-').map(Number)
-  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+// Last two years of months, newest first, for the dropdown.
+const monthOptions = Array.from({ length: 24 }, (_, i) => {
+  const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+  return {
+    value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+    label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+  }
 })
-
-const isCurrentMonth = computed(() => {
-  return selectedMonth.value === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-})
-
-function shiftMonth(delta) {
-  const [year, month] = selectedMonth.value.split('-').map(Number)
-  const d = new Date(year, month - 1 + delta, 1)
-  selectedMonth.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
 
 watch(selectedMonth, (month) => store.fetchMonthlyStats(month).catch(() => {}), { immediate: true })
 
@@ -105,27 +100,33 @@ onMounted(async () => {
       </div>
     </div>
 
+    <div class="rounded-xl border border-stone-200 bg-white p-4">
+      <p class="text-xs uppercase tracking-wide text-stone-500 mb-2">Revenue by payment</p>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <p class="text-xs text-stone-500">Cash</p>
+          <p class="mt-0.5 text-xl font-semibold tabular-nums text-emerald-700">
+            {{ money(store.stats?.cash_revenue) }}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs text-stone-500">Card</p>
+          <p class="mt-0.5 text-xl font-semibold tabular-nums text-stone-700">
+            {{ money(store.stats?.card_revenue) }}
+          </p>
+        </div>
+      </div>
+    </div>
+
     <div class="rounded-xl border border-stone-200 bg-white p-4 space-y-3">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-medium text-stone-700">Monthly summary</h2>
-        <div class="flex items-center gap-2">
-          <button
-            type="button"
-            class="h-7 w-7 rounded-full border border-stone-300 text-stone-600 hover:bg-stone-100"
-            @click="shiftMonth(-1)"
-          >
-            ‹
-          </button>
-          <span class="w-32 text-center text-sm text-stone-700">{{ monthLabel }}</span>
-          <button
-            type="button"
-            class="h-7 w-7 rounded-full border border-stone-300 text-stone-600 hover:bg-stone-100 disabled:opacity-30"
-            :disabled="isCurrentMonth"
-            @click="shiftMonth(1)"
-          >
-            ›
-          </button>
-        </div>
+        <select
+          v-model="selectedMonth"
+          class="rounded-lg border border-stone-300 px-2 py-1 text-sm bg-white"
+        >
+          <option v-for="m in monthOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
+        </select>
       </div>
 
       <div class="grid grid-cols-3 gap-3">
@@ -151,9 +152,10 @@ onMounted(async () => {
           </p>
         </div>
       </div>
-      <p class="text-xs text-stone-400">
-        {{ store.monthlyStats?.sales_count ?? 0 }} sale(s) · {{ store.monthlyStats?.orders_count ?? 0 }} order(s) placed
-      </p>
+      <div class="flex items-center justify-between text-xs text-stone-400">
+        <span>{{ store.monthlyStats?.sales_count ?? 0 }} sale(s) · {{ store.monthlyStats?.orders_count ?? 0 }} order(s) placed</span>
+        <span>{{ money(store.monthlyStats?.cash_revenue) }} cash · {{ money(store.monthlyStats?.card_revenue) }} card</span>
+      </div>
     </div>
 
     <div class="rounded-xl border border-stone-200 bg-white p-4">

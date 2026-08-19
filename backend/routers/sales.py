@@ -11,6 +11,11 @@ from schemas import SaleCreate, SaleRead, SaleUpdate
 router = APIRouter(prefix="/sales", tags=["sales"])
 
 
+def check_cash_amount(cash_amount, sale_price) -> None:
+    if cash_amount is not None and sale_price is not None and cash_amount > sale_price:
+        raise HTTPException(status_code=422, detail="cash_amount cannot exceed sale_price")
+
+
 async def get_or_404(db: AsyncSession, sale_id: int) -> Sale:
     sale = await db.get(Sale, sale_id)
     if sale is None:
@@ -43,7 +48,14 @@ async def create_sale(payload: SaleCreate, db: AsyncSession = Depends(get_db)) -
                 status_code=422, detail="That order belongs to a different dress"
             )
 
-    sale = Sale(**payload.model_dump())
+    check_cash_amount(payload.cash_amount, payload.sale_price)
+    data = payload.model_dump()
+    if payload.cash_amount is not None:
+        # cash_amount is authoritative once set — derive is_cash from it
+        # instead of trusting a client-sent value that could disagree.
+        data["is_cash"] = payload.sale_price is not None and payload.cash_amount >= payload.sale_price
+
+    sale = Sale(**data)
     db.add(sale)
     await db.commit()
     await db.refresh(sale)
@@ -55,8 +67,15 @@ async def update_sale(
     sale_id: int, payload: SaleUpdate, db: AsyncSession = Depends(get_db)
 ) -> Sale:
     sale = await get_or_404(db, sale_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         setattr(sale, field, value)
+
+    if "cash_amount" in changes and sale.cash_amount is not None:
+        check_cash_amount(sale.cash_amount, sale.sale_price)
+        if "is_cash" not in changes:
+            sale.is_cash = sale.sale_price is not None and sale.cash_amount >= sale.sale_price
+
     await db.commit()
     await db.refresh(sale)
     return sale
