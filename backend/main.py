@@ -6,7 +6,7 @@ from datetime import date
 
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,17 +56,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(dresses.router)
-app.include_router(orders.router)
-app.include_router(sales.router)
+# Routes live under /api so a single Vercel deployment can route "/api/*"
+# to this service and everything else to the Vue frontend — the frontend's
+# own client-side routes (e.g. /dresses/:id) would otherwise collide with
+# these same paths. See vercel.json at the repo root.
+API_PREFIX = "/api"
+
+app.include_router(dresses.router, prefix=API_PREFIX)
+app.include_router(orders.router, prefix=API_PREFIX)
+app.include_router(sales.router, prefix=API_PREFIX)
+
+meta_router = APIRouter(prefix=API_PREFIX, tags=["meta"])
 
 
-@app.get("/health", tags=["meta"])
+@meta_router.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
 
 
-@app.get("/statuses", tags=["meta"])
+@meta_router.get("/statuses")
 async def statuses() -> list:
     """The order pipeline, in order, for the frontend to render."""
     return [
@@ -75,7 +83,7 @@ async def statuses() -> list:
     ]
 
 
-@app.get("/stats", response_model=DashboardStats, tags=["meta"])
+@meta_router.get("/stats", response_model=DashboardStats)
 async def stats(db: AsyncSession = Depends(get_db)) -> DashboardStats:
     # Financial totals (revenue/cost/profit/cash vs card) are permanent
     # history and include archived dresses; inventory-workload figures
@@ -115,7 +123,7 @@ async def stats(db: AsyncSession = Depends(get_db)) -> DashboardStats:
 MONTH_PATTERN = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
-@app.get("/stats/monthly", response_model=MonthlyStats, tags=["meta"])
+@meta_router.get("/stats/monthly", response_model=MonthlyStats)
 async def monthly_stats(
     db: AsyncSession = Depends(get_db),
     month: Optional[str] = Query(default=None, description="YYYY-MM, defaults to the current month"),
@@ -153,3 +161,6 @@ async def monthly_stats(
 
     result.profit = result.revenue - result.cost
     return result
+
+
+app.include_router(meta_router)

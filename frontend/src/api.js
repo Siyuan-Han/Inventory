@@ -1,7 +1,10 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001').replace(/\/$/, '')
+// Relative by default ("/api") so a same-origin deployment (Vercel Services
+// routes "/api/*" to the backend) works with no env var set. Local dev sets
+// VITE_API_BASE_URL to a separate origin, e.g. http://localhost:8001/api.
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
 
 async function request(path, { method = 'GET', body, params } = {}) {
-  const url = new URL(BASE_URL + path)
+  const url = new URL(BASE_URL + path, window.location.origin)
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value)
