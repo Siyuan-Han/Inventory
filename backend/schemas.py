@@ -200,8 +200,9 @@ class MonthlyStats(BaseModel):
     orders_count: int = 0
     sales_count: int = 0
     revenue: Decimal = Decimal("0")
-    cost: Decimal = Decimal("0")
-    profit: Decimal = Decimal("0")
+    cost: Decimal = Decimal("0")  # cost of goods sold that were sold this month
+    inventory_spend: Decimal = Decimal("0")  # cost of orders placed this month, sold or not
+    profit: Decimal = Decimal("0")  # revenue - cost
     cash_sales: int = 0
     cash_revenue: Decimal = Decimal("0")
     card_revenue: Decimal = Decimal("0")

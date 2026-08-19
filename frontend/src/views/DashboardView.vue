@@ -138,7 +138,7 @@ onMounted(async () => {
         </select>
       </div>
 
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-2 gap-3">
         <div>
           <p class="text-xs uppercase tracking-wide text-stone-500">Revenue</p>
           <p class="mt-1 text-xl font-semibold tabular-nums">
@@ -150,6 +150,14 @@ onMounted(async () => {
           <p class="mt-1 text-xl font-semibold tabular-nums">
             {{ money(store.monthlyStats?.cost) }}
           </p>
+          <p class="mt-0.5 text-xs text-stone-400">sold this month</p>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-stone-500">Inventory</p>
+          <p class="mt-1 text-xl font-semibold tabular-nums">
+            {{ money(store.monthlyStats?.inventory_spend) }}
+          </p>
+          <p class="mt-0.5 text-xs text-stone-400">spent on new stock</p>
         </div>
         <div>
           <p class="text-xs uppercase tracking-wide text-stone-500">Profit</p>

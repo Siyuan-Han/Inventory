@@ -113,6 +113,7 @@ const MONTHLY_STATS = {
   sales_count: 2,
   revenue: '600.00',
   cost: '150.00',
+  inventory_spend: '75.00',
   profit: '450.00',
   cash_sales: 1,
   cash_revenue: '520.00',
@@ -195,6 +196,8 @@ describe('views and components render', () => {
     expect(wrapper.text()).toContain('$80.00') // card
     expect(wrapper.text()).toContain('Shipped from shipping center')
     expect(wrapper.text()).toContain('Monthly summary')
+    expect(wrapper.text()).toContain('$75.00') // monthly inventory spend
+    expect(wrapper.text()).toContain('spent on new stock')
     expect(wrapper.text()).toContain('2 sale(s)')
     // Month picker is a dropdown, not prev/next arrows.
     const select = wrapper.findAll('select').at(-1)

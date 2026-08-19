@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from config import settings
 from database import get_db, init_db
 from models import Dress
-from rollups import dress_rollup, sale_payment_split
+from rollups import dress_rollup, sale_cost_map, sale_payment_split
 from routers import dresses, orders, sales
 from schemas import (
     ORDER_STATUSES,
@@ -147,6 +147,7 @@ async def monthly_stats(
 
     result = MonthlyStats(month=month)
     for dress in all_dresses:
+        sale_costs = sale_cost_map(dress)
         for sale in dress.sales:
             if start <= sale.sale_date < end:
                 result.sales_count += 1
@@ -155,11 +156,12 @@ async def monthly_stats(
                 cash, card = sale_payment_split(sale)
                 result.cash_revenue += cash
                 result.card_revenue += card
+                result.cost += sale_costs.get(sale.id, 0)
         for order in dress.orders:
             if start <= order.order_date < end:
                 result.orders_count += 1
                 unit_cost = order.unit_cost if order.unit_cost is not None else dress.base_cost
-                result.cost += (unit_cost or 0) * (order.quantity or 0)
+                result.inventory_spend += (unit_cost or 0) * (order.quantity or 0)
 
     result.profit = result.revenue - result.cost
     return result
