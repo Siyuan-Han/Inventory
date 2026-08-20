@@ -49,13 +49,13 @@ export const api = {
   stats: () => request('/stats'),
   monthlyStats: (month) => request('/stats/monthly', { params: { month } }),
 
-  listDresses: ({ search, archived = false, supplier, notReceived = false } = {}) =>
+  listDresses: ({ search, archived = false, supplier, status } = {}) =>
     request('/dresses', {
       params: {
         search,
         archived: archived ? 'true' : undefined,
         supplier,
-        not_received: notReceived ? 'true' : undefined,
+        status,
       },
     }),
   nextDressCode: () => request('/dresses/next-code'),

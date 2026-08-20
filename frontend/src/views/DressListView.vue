@@ -11,12 +11,12 @@ const router = useRouter()
 const query = ref(store.search)
 const archived = computed(() => route.query.archived === 'true')
 const supplier = computed(() => route.query.supplier || '')
-const notReceived = computed(() => route.query.not_received === 'true')
-const hasFilters = computed(() => Boolean(supplier.value || notReceived.value))
+const status = computed(() => route.query.status || '')
+const hasFilters = computed(() => Boolean(supplier.value || status.value))
 let debounce
 
 function currentFilters() {
-  return { search: query.value, archived: archived.value, supplier: supplier.value, notReceived: notReceived.value }
+  return { search: query.value, archived: archived.value, supplier: supplier.value, status: status.value }
 }
 
 watch(query, () => {
@@ -24,7 +24,7 @@ watch(query, () => {
   debounce = setTimeout(() => store.fetchDresses(currentFilters()).catch(() => {}), 250)
 })
 
-watch([archived, supplier, notReceived], () => store.fetchDresses(currentFilters()).catch(() => {}))
+watch([archived, supplier, status], () => store.fetchDresses(currentFilters()).catch(() => {}))
 
 function toggleArchived(value) {
   router.push({ name: 'dresses', query: { ...route.query, archived: value ? 'true' : undefined } })
@@ -34,8 +34,8 @@ function setSupplier(value) {
   router.push({ name: 'dresses', query: { ...route.query, supplier: value || undefined } })
 }
 
-function toggleNotReceived(value) {
-  router.push({ name: 'dresses', query: { ...route.query, not_received: value ? 'true' : undefined } })
+function setStatus(value) {
+  router.push({ name: 'dresses', query: { ...route.query, status: value || undefined } })
 }
 
 function clearFilters() {
@@ -103,15 +103,14 @@ onMounted(async () => {
         <option v-for="s in store.suppliers" :key="s" :value="s">{{ s }}</option>
       </select>
 
-      <label class="flex items-center gap-2 rounded-lg border border-stone-300 px-3 py-2 text-sm bg-white cursor-pointer">
-        <input
-          type="checkbox"
-          :checked="notReceived"
-          class="h-4 w-4 rounded border-stone-300 accent-blush-600"
-          @change="toggleNotReceived($event.target.checked)"
-        />
-        Not yet received
-      </label>
+      <select
+        :value="status"
+        class="rounded-lg border border-stone-300 px-3 py-2 text-sm bg-white"
+        @change="setStatus($event.target.value)"
+      >
+        <option value="">All statuses</option>
+        <option v-for="s in store.statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
+      </select>
 
       <button
         v-if="hasFilters"

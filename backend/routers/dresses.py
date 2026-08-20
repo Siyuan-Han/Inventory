@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from models import Dress, DressOrder, Sale
 from rollups import dress_rollup
-from schemas import DressCreate, DressDetail, DressRead, DressUpdate, NextDressCode
+from schemas import ORDER_STATUSES, DressCreate, DressDetail, DressRead, DressUpdate, NextDressCode
 
 router = APIRouter(prefix="/dresses", tags=["dresses"])
 
@@ -84,10 +84,14 @@ async def list_dresses(
     search: Optional[str] = Query(default=None, description="Match code, style or supplier"),
     archived: bool = Query(default=False, description="List archived dresses instead of active ones"),
     supplier: Optional[str] = Query(default=None, description="Exact supplier match"),
-    not_received: bool = Query(
-        default=False, description="Only dresses with at least one order not yet received"
+    status: Optional[str] = Query(
+        default=None, description="Only dresses whose most recent order is at this status"
     ),
 ) -> List[DressRead]:
+    if status is not None and status not in ORDER_STATUSES:
+        raise HTTPException(
+            status_code=422, detail=f"status must be one of: {', '.join(ORDER_STATUSES)}"
+        )
     stmt = (
         select(Dress)
         .options(selectinload(Dress.orders), selectinload(Dress.sales))
@@ -106,8 +110,8 @@ async def list_dresses(
             )
         )
     results = [to_read(d) for d in (await db.scalars(stmt)).all()]
-    if not_received:
-        results = [d for d in results if d.pending_orders > 0]
+    if status is not None:
+        results = [d for d in results if d.latest_status == status]
     return results
 
 

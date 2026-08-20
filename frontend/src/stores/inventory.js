@@ -12,7 +12,7 @@ export const useInventoryStore = defineStore('inventory', {
     search: '',
     showArchived: false,
     supplierFilter: '',
-    notReceivedOnly: false,
+    statusFilter: '',
     loading: false,
     saving: false,
     error: null,
@@ -73,14 +73,14 @@ export const useInventoryStore = defineStore('inventory', {
         search = this.search,
         archived = this.showArchived,
         supplier = this.supplierFilter,
-        notReceived = this.notReceivedOnly,
+        status = this.statusFilter,
       } = filters
       this.search = search
       this.showArchived = archived
       this.supplierFilter = supplier
-      this.notReceivedOnly = notReceived
+      this.statusFilter = status
       return this.run(async () => {
-        this.dresses = await api.listDresses({ search, archived, supplier, notReceived })
+        this.dresses = await api.listDresses({ search, archived, supplier, status })
       })
     },
 

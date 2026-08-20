@@ -217,20 +217,21 @@ describe('views and components render', () => {
     )
   })
 
-  it('Dress list filters by supplier and by not-yet-received', async () => {
+  it('Dress list filters by supplier and by status', async () => {
     const wrapper = await mountWith(DressListView)
     const { api } = await import('../api')
 
-    await wrapper.find('select').setValue('Shanghai Factory')
+    const [supplierSelect, statusSelect] = wrapper.findAll('select')
+    await supplierSelect.setValue('Shanghai Factory')
     await flushPromises()
     expect(api.listDresses).toHaveBeenLastCalledWith(
       expect.objectContaining({ supplier: 'Shanghai Factory' }),
     )
 
-    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await statusSelect.setValue('arrived_shipping_center')
     await flushPromises()
     expect(api.listDresses).toHaveBeenLastCalledWith(
-      expect.objectContaining({ notReceived: true }),
+      expect.objectContaining({ status: 'arrived_shipping_center' }),
     )
   })
 
