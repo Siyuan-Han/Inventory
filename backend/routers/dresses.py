@@ -11,27 +11,46 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from models import Dress, DressOrder, Sale
 from rollups import dress_rollup
-from schemas import ORDER_STATUSES, DressCreate, DressDetail, DressRead, DressUpdate, NextDressCode
+from routers.orders import stamp_status, validate_status
+from schemas import (
+    ORDER_STATUSES,
+    DressCreate,
+    DressDetail,
+    DressRead,
+    DressUpdate,
+    NextDressCode,
+    SecondhandDressCreate,
+)
 
 router = APIRouter(prefix="/dresses", tags=["dresses"])
 
-CODE_PREFIX = "WD"
-CODE_PATTERN = re.compile(rf"^{CODE_PREFIX}(\d+)$")
+CATEGORIES = ["new", "secondhand"]
+CODE_PREFIXES = {"new": "WD", "secondhand": "SH"}
+
+
+def validate_category(category: str) -> str:
+    if category not in CATEGORIES:
+        raise HTTPException(
+            status_code=422, detail=f"category must be one of: {', '.join(CATEGORIES)}"
+        )
+    return category
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-async def next_code(db: AsyncSession) -> str:
-    """The next sequential WDxxx code, based on the highest one in use."""
+async def next_code(db: AsyncSession, category: str = "new") -> str:
+    """The next sequential code for this category (WDxxx or SHxxx)."""
+    prefix = CODE_PREFIXES[category]
+    pattern = re.compile(rf"^{prefix}(\d+)$")
     codes = (await db.scalars(select(Dress.dress_code))).all()
     highest = 0
     for code in codes:
-        match = CODE_PATTERN.match(code or "")
+        match = pattern.match(code or "")
         if match:
             highest = max(highest, int(match.group(1)))
-    return f"{CODE_PREFIX}{highest + 1:03d}"
+    return f"{prefix}{highest + 1:03d}"
 
 
 def to_read(dress: Dress) -> DressRead:
@@ -61,13 +80,21 @@ async def load_dress(db: AsyncSession, dress_id: int) -> Dress:
 
 
 @router.get("/next-code", response_model=NextDressCode)
-async def preview_next_code(db: AsyncSession = Depends(get_db)) -> NextDressCode:
+async def preview_next_code(
+    db: AsyncSession = Depends(get_db),
+    category: str = Query(default="new", description="'new' or 'secondhand'"),
+) -> NextDressCode:
     """A preview of the code the next dress will get. Not reserved."""
-    return NextDressCode(dress_code=await next_code(db))
+    return NextDressCode(dress_code=await next_code(db, validate_category(category)))
 
 
 @router.get("/suppliers", response_model=List[str])
-async def list_suppliers(db: AsyncSession = Depends(get_db)) -> List[str]:
+async def list_suppliers(
+    db: AsyncSession = Depends(get_db),
+    category: Optional[str] = Query(
+        default=None, description="Scope suggestions to 'new' or 'secondhand' only"
+    ),
+) -> List[str]:
     """Distinct supplier names in use, for populating a filter dropdown."""
     stmt = (
         select(Dress.supplier)
@@ -75,6 +102,8 @@ async def list_suppliers(db: AsyncSession = Depends(get_db)) -> List[str]:
         .distinct()
         .order_by(Dress.supplier)
     )
+    if category is not None:
+        stmt = stmt.where(Dress.category == validate_category(category))
     return list((await db.scalars(stmt)).all())
 
 
@@ -87,6 +116,7 @@ async def list_dresses(
     status: Optional[str] = Query(
         default=None, description="Only dresses whose most recent order is at this status"
     ),
+    category: Optional[str] = Query(default=None, description="'new' or 'secondhand'"),
 ) -> List[DressRead]:
     if status is not None and status not in ORDER_STATUSES:
         raise HTTPException(
@@ -98,6 +128,8 @@ async def list_dresses(
         .order_by(Dress.dress_code)
     )
     stmt = stmt.where(Dress.archived_at.isnot(None) if archived else Dress.archived_at.is_(None))
+    if category is not None:
+        stmt = stmt.where(Dress.category == validate_category(category))
     if supplier:
         stmt = stmt.where(Dress.supplier == supplier)
     if search and search.strip():
@@ -134,6 +166,45 @@ async def create_dress(payload: DressCreate, db: AsyncSession = Depends(get_db))
                 raise HTTPException(
                     status_code=409, detail=f"Dress code '{payload.dress_code}' already exists"
                 )
+    else:
+        raise HTTPException(status_code=500, detail="Could not assign a dress code, try again")
+
+    return to_detail(await load_dress(db, dress.id))
+
+
+@router.post("/secondhand", response_model=DressDetail, status_code=201)
+async def create_secondhand_dress(
+    payload: SecondhandDressCreate, db: AsyncSession = Depends(get_db)
+) -> DressDetail:
+    """Creates a secondhand dress and its one acquisition order together.
+
+    One combined action instead of the usual two-step "add dress, then add
+    order" flow — a secondhand piece is unique, so there's only ever this
+    one order for it (see the guard in routers/orders.py create_order).
+    """
+    dress_fields = payload.model_dump(
+        exclude={"order_date", "unit_cost", "status", "tracking_number", "order_notes"}
+    )
+
+    for attempt in range(5):
+        dress_fields["dress_code"] = await next_code(db, "secondhand")
+        dress = Dress(category="secondhand", **dress_fields)
+        order = DressOrder(
+            order_date=payload.order_date,
+            quantity=1,
+            unit_cost=payload.unit_cost,
+            status=payload.status,
+            tracking_number=payload.tracking_number,
+            notes=payload.order_notes,
+        )
+        stamp_status(order, validate_status(order.status))
+        dress.orders.append(order)
+        db.add(dress)
+        try:
+            await db.commit()
+            break
+        except IntegrityError:
+            await db.rollback()
     else:
         raise HTTPException(status_code=500, detail="Could not assign a dress code, try again")
 

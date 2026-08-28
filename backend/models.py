@@ -13,6 +13,9 @@ class Dress(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     dress_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    # "new" (reorderable, from a supplier) or "secondhand" (one-off, never
+    # reordered). Set once at creation — not client-editable afterward.
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="new", server_default="new")
     style_name: Mapped[Optional[str]] = mapped_column(String(200))
     photo_url: Mapped[Optional[str]] = mapped_column(Text)
     supplier: Mapped[Optional[str]] = mapped_column(String(200))

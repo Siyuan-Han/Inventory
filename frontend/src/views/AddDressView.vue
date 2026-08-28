@@ -14,6 +14,10 @@ const dressId = computed(() => (props.id ?? route.params.id) || null)
 const isEdit = computed(() => Boolean(dressId.value))
 const localError = ref(null)
 const previewCode = ref('')
+// This form only ever creates "new" dresses (secondhand upload is a
+// separate page) but edits either category — set from the fetched dress.
+const category = ref('new')
+const isSecondhand = computed(() => category.value === 'secondhand')
 
 const form = reactive({
   dress_code: '', // only used in edit mode; new dresses get a server-assigned code
@@ -24,17 +28,19 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  store.fetchSuppliers().catch(() => {})
   if (isEdit.value) {
     const dress = await store.fetchDress(dressId.value).catch(() => null)
     if (!dress) return
+    category.value = dress.category || 'new'
     form.dress_code = dress.dress_code || ''
     form.style_name = dress.style_name || ''
     form.supplier = dress.supplier || ''
     form.base_cost = dress.base_cost ?? ''
     form.photo_url = dress.photo_url || ''
+    store.fetchSuppliers(category.value).catch(() => {})
   } else {
-    previewCode.value = await store.nextDressCode().catch(() => '')
+    store.fetchSuppliers('new').catch(() => {})
+    previewCode.value = await store.nextDressCode('new').catch(() => '')
   }
 })
 
@@ -53,7 +59,8 @@ async function submit() {
     const dress = isEdit.value
       ? await store.updateDress(dressId.value, payload)
       : await store.createDress(payload)
-    router.push({ name: 'dress-detail', params: { id: dress.id } })
+    const detailRoute = isSecondhand.value ? 'secondhand-detail' : 'dress-detail'
+    router.push({ name: detailRoute, params: { id: dress.id } })
   } catch {
     localError.value = store.error
   }
@@ -63,7 +70,7 @@ async function submit() {
 <template>
   <section class="max-w-lg mx-auto space-y-5">
     <h1 class="text-2xl font-semibold tracking-tight">
-      {{ isEdit ? 'Edit dress' : 'Add a dress' }}
+      {{ isEdit ? (isSecondhand ? 'Edit secondhand piece' : 'Edit dress') : 'Add a dress' }}
     </h1>
 
     <form class="space-y-4" @submit.prevent="submit">
@@ -96,13 +103,13 @@ async function submit() {
 
       <div class="grid grid-cols-2 gap-3">
         <label class="block">
-          <span class="text-sm text-stone-600">Supplier</span>
+          <span class="text-sm text-stone-600">{{ isSecondhand ? 'Seller' : 'Supplier' }}</span>
           <div class="mt-1">
             <ComboBox
               v-model="form.supplier"
               :options="store.suppliers"
               :maxlength="200"
-              placeholder="Shanghai Factory"
+              :placeholder="isSecondhand ? 'Individual seller' : 'Shanghai Factory'"
             />
           </div>
         </label>

@@ -22,6 +22,11 @@ export const useInventoryStore = defineStore('inventory', {
     statusLabel: (state) => (value) =>
       state.statuses.find((s) => s.value === value)?.label || value || '—',
     statusIndex: (state) => (value) => state.statuses.findIndex((s) => s.value === value),
+    /** The status right after `value` in the pipeline, or null if there isn't one. */
+    nextStatus: (state) => (value) => {
+      const index = state.statuses.findIndex((s) => s.value === value)
+      return index >= 0 && index < state.statuses.length - 1 ? state.statuses[index + 1] : null
+    },
   },
 
   actions: {
@@ -45,13 +50,13 @@ export const useInventoryStore = defineStore('inventory', {
       return this.statuses
     },
 
-    async nextDressCode() {
-      const { dress_code } = await api.nextDressCode()
+    async nextDressCode(category) {
+      const { dress_code } = await api.nextDressCode(category)
       return dress_code
     },
 
-    async fetchSuppliers() {
-      this.suppliers = await api.suppliers()
+    async fetchSuppliers(category) {
+      this.suppliers = await api.suppliers(category)
       return this.suppliers
     },
 
@@ -74,13 +79,14 @@ export const useInventoryStore = defineStore('inventory', {
         archived = this.showArchived,
         supplier = this.supplierFilter,
         status = this.statusFilter,
+        category,
       } = filters
       this.search = search
       this.showArchived = archived
       this.supplierFilter = supplier
       this.statusFilter = status
       return this.run(async () => {
-        this.dresses = await api.listDresses({ search, archived, supplier, status })
+        this.dresses = await api.listDresses({ search, archived, supplier, status, category })
       })
     },
 
@@ -94,6 +100,14 @@ export const useInventoryStore = defineStore('inventory', {
     async createDress(data) {
       return this.run(async () => {
         const created = await api.createDress(data)
+        this.dresses.push(created)
+        return created
+      }, { flag: 'saving' })
+    },
+
+    async createSecondhandDress(data) {
+      return this.run(async () => {
+        const created = await api.createSecondhandDress(data)
         this.dresses.push(created)
         return created
       }, { flag: 'saving' })
@@ -152,6 +166,19 @@ export const useInventoryStore = defineStore('inventory', {
       return this.run(async () => {
         await api.updateOrder(orderId, patch)
         await this.refreshDress(dressId)
+      }, { flag: 'saving' })
+    },
+
+    /** Advance several orders (all currently at the same status) together. */
+    async bulkAdvanceOrders(orderIds, status, statusDate) {
+      return this.run(async () => {
+        const updated = await api.bulkUpdateOrderStatus({
+          order_ids: orderIds,
+          status,
+          status_date: statusDate || undefined,
+        })
+        this.stats = null // rollups changed; the dashboard will refetch
+        return updated
       }, { flag: 'saving' })
     },
 

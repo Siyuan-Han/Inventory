@@ -49,19 +49,21 @@ export const api = {
   stats: () => request('/stats'),
   monthlyStats: (month) => request('/stats/monthly', { params: { month } }),
 
-  listDresses: ({ search, archived = false, supplier, status } = {}) =>
+  listDresses: ({ search, archived = false, supplier, status, category } = {}) =>
     request('/dresses', {
       params: {
         search,
         archived: archived ? 'true' : undefined,
         supplier,
         status,
+        category,
       },
     }),
-  nextDressCode: () => request('/dresses/next-code'),
-  suppliers: () => request('/dresses/suppliers'),
+  nextDressCode: (category) => request('/dresses/next-code', { params: { category } }),
+  suppliers: (category) => request('/dresses/suppliers', { params: { category } }),
   getDress: (id) => request(`/dresses/${id}`),
   createDress: (data) => request('/dresses', { method: 'POST', body: data }),
+  createSecondhandDress: (data) => request('/dresses/secondhand', { method: 'POST', body: data }),
   updateDress: (id, data) => request(`/dresses/${id}`, { method: 'PUT', body: data }),
   archiveDress: (id) => request(`/dresses/${id}/archive`, { method: 'POST' }),
   restoreDress: (id) => request(`/dresses/${id}/restore`, { method: 'POST' }),
@@ -71,6 +73,7 @@ export const api = {
   createOrder: (data) => request('/orders', { method: 'POST', body: data }),
   updateOrder: (id, data) => request(`/orders/${id}`, { method: 'PUT', body: data }),
   deleteOrder: (id) => request(`/orders/${id}`, { method: 'DELETE' }),
+  bulkUpdateOrderStatus: (data) => request('/orders/bulk-status', { method: 'POST', body: data }),
 
   listSales: (dressId) => request('/sales', { params: { dress_id: dressId } }),
   createSale: (data) => request('/sales', { method: 'POST', body: data }),

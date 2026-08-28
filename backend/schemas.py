@@ -60,6 +60,21 @@ class DressUpdate(BaseModel):
     base_cost: Optional[Decimal] = Field(default=None, ge=0)
 
 
+class SecondhandDressCreate(DressBase):
+    """Creates a secondhand dress and its one acquisition order together.
+
+    A secondhand piece is unique — no quantity field, always 1 — and never
+    gets a second order, so this combines what's normally two separate steps
+    (add dress, then add order) into one atomic action.
+    """
+
+    order_date: date
+    unit_cost: Optional[Decimal] = Field(default=None, ge=0)
+    status: str = "ordered"
+    tracking_number: Optional[str] = Field(default=None, max_length=100)
+    order_notes: Optional[str] = None
+
+
 # --------------------------------------------------------------------------
 # Order
 # --------------------------------------------------------------------------
@@ -91,6 +106,20 @@ class OrderUpdate(BaseModel):
     arrived_shipping_center_at: Optional[datetime] = None
     arrived_us_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
+
+
+class BulkOrderStatusUpdate(BaseModel):
+    """Advance several orders to the same next status at once.
+
+    All `order_ids` must currently share one status — the point is moving a
+    batch that's sitting together at one stage (e.g. 20+ secondhand pieces
+    all "at shipping center") to the next stage together, not advancing
+    unrelated orders to different places in one call.
+    """
+
+    order_ids: List[int] = Field(min_length=1)
+    status: str
+    status_date: Optional[date] = None
 
 
 class OrderRead(ORMModel):
@@ -156,6 +185,7 @@ class SaleRead(ORMModel):
 class DressRead(ORMModel):
     id: int
     dress_code: str
+    category: str = "new"  # "new" (reorderable) or "secondhand" (one-off)
     style_name: Optional[str] = None
     photo_url: Optional[str] = None
     supplier: Optional[str] = None
@@ -172,6 +202,7 @@ class DressRead(ORMModel):
     total_revenue: Decimal = Decimal("0")
     total_cost: Decimal = Decimal("0")
     latest_status: Optional[str] = None
+    latest_order_id: Optional[int] = None
 
 
 class DressDetail(DressRead):

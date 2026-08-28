@@ -100,4 +100,5 @@ def dress_rollup(dress: Dress) -> Dict[str, Any]:
         "cost_of_goods_sold": cost_of_goods_sold,
         "inventory_value": inventory_value,
         "latest_status": latest_order.status if latest_order else None,
+        "latest_order_id": latest_order.id if latest_order else None,
     }

@@ -9,15 +9,17 @@ const route = useRoute()
 const tabs = [
   { name: 'dashboard', label: 'Dashboard', icon: '◱' },
   { name: 'dresses', label: 'Dresses', icon: '❖' },
+  { name: 'secondhand', label: 'Secondhand', icon: '⟲' },
   { name: 'dress-new', label: 'Add', icon: '＋' },
 ]
 
-// Detail and edit pages live "under" the dress list, so keep that tab lit.
-const activeTab = computed(() =>
-  String(route.name || '').startsWith('dress-detail') || route.name === 'dress-edit'
-    ? 'dresses'
-    : route.name,
-)
+// Detail and edit pages live "under" their list, so keep that tab lit.
+const activeTab = computed(() => {
+  const name = String(route.name || '')
+  if (name.startsWith('secondhand')) return 'secondhand'
+  if (name.startsWith('dress-detail') || name === 'dress-edit') return 'dresses'
+  return route.name
+})
 
 onMounted(() => store.loadStatuses().catch(() => {}))
 </script>
@@ -63,7 +65,7 @@ onMounted(() => store.loadStatuses().catch(() => {}))
     <nav
       class="sm:hidden fixed bottom-0 inset-x-0 z-20 bg-white border-t border-stone-200 pb-[env(safe-area-inset-bottom)]"
     >
-      <div class="grid grid-cols-3">
+      <div class="grid grid-cols-4">
         <RouterLink
           v-for="tab in tabs"
           :key="tab.name"

@@ -19,6 +19,9 @@ const trackingEdits = reactive({})
 
 const dress = computed(() => store.dress)
 const dressId = computed(() => Number(props.id ?? route.params.id))
+const isSecondhand = computed(() => dress.value?.category === 'secondhand')
+const listRoute = computed(() => (isSecondhand.value ? 'secondhand' : 'dresses'))
+const editRoute = computed(() => (isSecondhand.value ? 'secondhand-edit' : 'dress-edit'))
 const today = () => new Date().toISOString().slice(0, 10)
 
 const money = (value) =>
@@ -29,7 +32,7 @@ const money = (value) =>
 const stamp = (value) =>
   value ? new Date(value + (value.endsWith('Z') ? '' : 'Z')).toLocaleDateString() : null
 
-/** The five pipeline stages for one order, each with its timestamp. */
+/** The pipeline stages for one order, each with its timestamp. */
 function timeline(order) {
   const reachedIndex = store.statusIndex(order.status)
   return store.statuses.map((status, index) => ({
@@ -37,11 +40,6 @@ function timeline(order) {
     at: stamp(order[status.field]),
     done: index <= reachedIndex,
   }))
-}
-
-function nextStatus(order) {
-  const index = store.statusIndex(order.status)
-  return index >= 0 && index < store.statuses.length - 1 ? store.statuses[index + 1] : null
 }
 
 function orderLabel(orderId) {
@@ -73,7 +71,7 @@ function cancelAdvance(order) {
 }
 
 async function confirmAdvance(order) {
-  const next = nextStatus(order)
+  const next = store.nextStatus(order.status)
   const { date, trackingNumber } = advancing[order.id] || {}
   if (!next) return
   const includeTracking = next.value === 'shipped_from_factory'
@@ -109,8 +107,9 @@ async function removeSale(sale) {
 
 async function removeDress() {
   if (!confirm(`Delete ${dress.value.dress_code} and all its orders and sales?`)) return
+  const listRoute = dress.value.category === 'secondhand' ? 'secondhand' : 'dresses'
   await store.deleteDress(dressId.value).catch(() => {})
-  if (!store.error) router.push({ name: 'dresses' })
+  if (!store.error) router.push({ name: listRoute })
 }
 
 async function archiveDress() {
@@ -133,8 +132,8 @@ watch(dressId, load)
 
 <template>
   <section v-if="dress" class="space-y-6">
-    <RouterLink :to="{ name: 'dresses' }" class="text-sm text-stone-500 hover:text-stone-800">
-      ← All dresses
+    <RouterLink :to="{ name: listRoute }" class="text-sm text-stone-500 hover:text-stone-800">
+      ← All {{ isSecondhand ? 'secondhand' : 'dresses' }}
     </RouterLink>
 
     <p
@@ -170,7 +169,7 @@ watch(dressId, load)
 
         <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <div>
-            <dt class="text-stone-500">Supplier</dt>
+            <dt class="text-stone-500">{{ isSecondhand ? 'Seller' : 'Supplier' }}</dt>
             <dd>{{ dress.supplier || '—' }}</dd>
           </div>
           <div>
@@ -189,7 +188,7 @@ watch(dressId, load)
 
         <div class="flex flex-wrap gap-2 pt-1">
           <RouterLink
-            :to="{ name: 'dress-edit', params: { id: dress.id } }"
+            :to="{ name: editRoute, params: { id: dress.id } }"
             class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100"
           >
             Edit
@@ -232,6 +231,7 @@ watch(dressId, load)
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold">Orders</h2>
         <button
+          v-if="!isSecondhand"
           class="rounded-lg bg-blush-600 px-3 py-1.5 text-sm text-white hover:bg-blush-700"
           @click="showOrderForm = true"
         >
@@ -312,7 +312,7 @@ watch(dressId, load)
           class="flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 border border-stone-200 p-2"
         >
           <label class="text-sm text-stone-600">
-            {{ nextStatus(order).label }} on
+            {{ store.nextStatus(order.status).label }} on
           </label>
           <input
             v-model="advancing[order.id].date"
@@ -320,7 +320,7 @@ watch(dressId, load)
             class="rounded-lg border border-stone-300 px-2 py-1 text-sm"
           />
           <input
-            v-if="nextStatus(order).value === 'shipped_from_factory'"
+            v-if="store.nextStatus(order.status).value === 'shipped_from_factory'"
             v-model="advancing[order.id].trackingNumber"
             type="text"
             placeholder="Tracking number (optional)"
@@ -339,12 +339,12 @@ watch(dressId, load)
         </div>
         <div v-else class="flex gap-2">
           <button
-            v-if="nextStatus(order)"
+            v-if="store.nextStatus(order.status)"
             :disabled="store.saving"
             class="rounded-lg border border-stone-300 px-3 py-1.5 text-sm hover:bg-stone-100 disabled:opacity-50"
             @click="openAdvance(order)"
           >
-            Mark {{ nextStatus(order).label.toLowerCase() }}
+            Mark {{ store.nextStatus(order.status).label.toLowerCase() }}
           </button>
           <button
             :disabled="store.saving"

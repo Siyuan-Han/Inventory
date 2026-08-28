@@ -10,6 +10,7 @@ import DashboardView from '../views/DashboardView.vue'
 import DressListView from '../views/DressListView.vue'
 import DressDetailView from '../views/DressDetailView.vue'
 import AddDressView from '../views/AddDressView.vue'
+import AddSecondhandDressView from '../views/AddSecondhandDressView.vue'
 import DressCard from '../components/DressCard.vue'
 import OrderForm from '../components/OrderForm.vue'
 import SaleForm from '../components/SaleForm.vue'
@@ -67,6 +68,7 @@ const SPLIT_SALE = {
 const DRESS = {
   id: 1,
   dress_code: 'WD001',
+  category: 'new',
   style_name: 'White Lace',
   photo_url: null,
   supplier: 'Shanghai Factory',
@@ -81,8 +83,49 @@ const DRESS = {
   total_revenue: '400.00',
   total_cost: '150.00',
   latest_status: 'arrived_shipping_center',
+  latest_order_id: 1,
   orders: [ORDER],
   sales: [SALE, SPLIT_SALE],
+}
+
+const SECONDHAND_ORDER = {
+  id: 10,
+  dress_id: 2,
+  order_date: '2026-08-15',
+  quantity: 1,
+  unit_cost: '90.00',
+  status: 'arrived_shipping_center',
+  tracking_number: 'SH-TRACK-1',
+  notes: null,
+  ordered_at: '2026-08-15T10:00:00',
+  shipped_from_factory_at: '2026-08-16T10:00:00',
+  arrived_shipping_center_at: '2026-08-17T10:00:00',
+  arrived_us_at: null,
+  received_at: null,
+  created_at: '2026-08-15T10:00:00',
+}
+
+const SECONDHAND_DRESS = {
+  id: 2,
+  dress_code: 'SH001',
+  category: 'secondhand',
+  style_name: 'Vintage Slip Dress',
+  photo_url: null,
+  supplier: 'Jane Doe',
+  base_cost: '90.00',
+  created_at: '2026-08-15T10:00:00',
+  archived_at: null,
+  total_ordered: 1,
+  total_received: 0,
+  total_sold: 0,
+  in_stock: 0,
+  pending_orders: 1,
+  total_revenue: '0',
+  total_cost: '90.00',
+  latest_status: 'arrived_shipping_center',
+  latest_order_id: 10,
+  orders: [SECONDHAND_ORDER],
+  sales: [],
 }
 
 const STATS = {
@@ -131,6 +174,7 @@ vi.mock('../api', () => {
     suppliers: vi.fn(async () => ['Shanghai Factory', 'Beijing Silks']),
     getDress: vi.fn(async () => DRESS),
     createDress: vi.fn(async () => DRESS),
+    createSecondhandDress: vi.fn(async () => SECONDHAND_DRESS),
     updateDress: vi.fn(async () => DRESS),
     archiveDress: vi.fn(async () => ({ ...DRESS, archived_at: '2026-08-19T10:00:00' })),
     restoreDress: vi.fn(async () => ({ ...DRESS, archived_at: null })),
@@ -139,6 +183,7 @@ vi.mock('../api', () => {
     createOrder: vi.fn(async () => ORDER),
     updateOrder: vi.fn(async () => ORDER),
     deleteOrder: vi.fn(async () => null),
+    bulkUpdateOrderStatus: vi.fn(async () => [SECONDHAND_ORDER]),
     listSales: vi.fn(async () => [SALE]),
     createSale: vi.fn(async () => SALE),
     deleteSale: vi.fn(async () => null),
@@ -155,6 +200,10 @@ function makeRouter() {
       { path: '/dresses/new', name: 'dress-new', component: { template: '<div />' } },
       { path: '/dresses/:id', name: 'dress-detail', component: { template: '<div />' } },
       { path: '/dresses/:id/edit', name: 'dress-edit', component: { template: '<div />' } },
+      { path: '/secondhand', name: 'secondhand', component: { template: '<div />' } },
+      { path: '/secondhand/new', name: 'secondhand-new', component: { template: '<div />' } },
+      { path: '/secondhand/:id', name: 'secondhand-detail', component: { template: '<div />' } },
+      { path: '/secondhand/:id/edit', name: 'secondhand-edit', component: { template: '<div />' } },
     ],
   })
 }
@@ -403,6 +452,85 @@ describe('views and components render', () => {
     expect(wrapper.find('input').element.value).toBe('WD001')
     expect(wrapper.text()).toContain('Save changes')
   })
+
+  it('Secondhand list only shows bulk-select once a status filter is active, and bulk-advances the selection', async () => {
+    const { api } = await import('../api')
+    api.listDresses.mockImplementation(async () => [SECONDHAND_DRESS])
+
+    const wrapper = await mountWith(DressListView, {
+      props: { category: 'secondhand' },
+      route: '/secondhand',
+    })
+    expect(wrapper.text()).toContain('Secondhand')
+    expect(wrapper.text()).toContain('SH001')
+    // No status filter yet — no selection UI.
+    expect(wrapper.find('button[aria-label="Select"]').exists()).toBe(false)
+
+    const [, statusSelect] = wrapper.findAll('select')
+    await statusSelect.setValue('arrived_shipping_center')
+    await flushPromises()
+
+    const selectButton = wrapper.find('button[aria-label="Select"]')
+    expect(selectButton.exists()).toBe(true)
+    await selectButton.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('1 selected')
+
+    const markButton = wrapper.findAll('button').find((b) => b.text().startsWith('Mark as'))
+    expect(markButton.text()).toContain('Received') // the next stage after arrived_shipping_center
+    await markButton.trigger('click')
+    await flushPromises()
+
+    expect(api.bulkUpdateOrderStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ order_ids: [10], status: 'received' }),
+    )
+
+    api.listDresses.mockImplementation(async () => [DRESS])
+  })
+
+  it('Add secondhand dress form submits the dress and its one order together', async () => {
+    const wrapper = await mountWith(AddSecondhandDressView, { route: '/secondhand/new' })
+    const { api } = await import('../api')
+
+    expect(wrapper.text()).toContain('assigned automatically')
+
+    await wrapper.find('input[type="date"]').setValue('2026-08-20')
+    await wrapper.find('input[type="number"]').setValue('90')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.createSecondhandDress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order_date: '2026-08-20',
+        base_cost: 90,
+        unit_cost: 90,
+        status: 'ordered',
+      }),
+    )
+  })
+
+  it('Dress detail hides "Add order" and labels the seller for a secondhand dress', async () => {
+    const { api } = await import('../api')
+    api.getDress.mockResolvedValueOnce(SECONDHAND_DRESS)
+    const wrapper = await mountWith(DressDetailView, {
+      props: { id: '2' },
+      route: '/secondhand/2',
+    })
+
+    expect(wrapper.text()).toContain('Seller')
+    expect(wrapper.text()).not.toContain('Supplier')
+    expect(wrapper.findAll('button').find((b) => b.text() === 'Add order')).toBeUndefined()
+    expect(wrapper.text()).toContain('← All secondhand')
+  })
+
+  it('DressCard links to the secondhand detail route for a secondhand dress', () => {
+    const wrapper = mount(DressCard, {
+      props: { dress: SECONDHAND_DRESS },
+      global: { plugins: [createPinia(), makeRouter()] },
+    })
+    expect(wrapper.get('a').attributes('href')).toBe('/secondhand/2')
+  })
 })
 
 describe('inventory store', () => {
@@ -429,5 +557,27 @@ describe('inventory store', () => {
     store.dresses = [DRESS]
     await store.archiveDress(1)
     expect(store.dresses).toHaveLength(0)
+  })
+
+  it('nextStatus gives the stage right after the current one, or null at the end', async () => {
+    const store = useInventoryStore()
+    await store.loadStatuses()
+    expect(store.nextStatus('shipped_from_factory').value).toBe('arrived_shipping_center')
+    expect(store.nextStatus('received')).toBeNull()
+  })
+
+  it('bulkAdvanceOrders posts the batch and invalidates cached stats', async () => {
+    const store = useInventoryStore()
+    const { api } = await import('../api')
+    store.stats = STATS
+
+    await store.bulkAdvanceOrders([10, 11], 'received', '2026-08-20')
+
+    expect(api.bulkUpdateOrderStatus).toHaveBeenCalledWith({
+      order_ids: [10, 11],
+      status: 'received',
+      status_date: '2026-08-20',
+    })
+    expect(store.stats).toBeNull()
   })
 })

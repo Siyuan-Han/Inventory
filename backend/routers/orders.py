@@ -7,7 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models import Dress, DressOrder, Sale
-from schemas import ORDER_STATUSES, STATUS_TIMESTAMP_FIELD, OrderCreate, OrderRead, OrderUpdate
+from schemas import (
+    ORDER_STATUSES,
+    STATUS_TIMESTAMP_FIELD,
+    BulkOrderStatusUpdate,
+    OrderCreate,
+    OrderRead,
+    OrderUpdate,
+)
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -64,8 +71,15 @@ async def list_orders(
 
 @router.post("", response_model=OrderRead, status_code=201)
 async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db)) -> DressOrder:
-    if await db.get(Dress, payload.dress_id) is None:
+    dress = await db.get(Dress, payload.dress_id)
+    if dress is None:
         raise HTTPException(status_code=404, detail=f"Dress {payload.dress_id} not found")
+    # "One piece is one piece" — a secondhand dress is unique and never
+    # restocked, so it gets exactly the one order created alongside it.
+    if dress.category == "secondhand" and dress.orders:
+        raise HTTPException(
+            status_code=409, detail="Secondhand dresses can only have one order"
+        )
 
     order = DressOrder(**payload.model_dump())
     stamp_status(order, validate_status(order.status))
@@ -73,6 +87,51 @@ async def create_order(payload: OrderCreate, db: AsyncSession = Depends(get_db))
     await db.commit()
     await db.refresh(order)
     return order
+
+
+@router.post("/bulk-status", response_model=List[OrderRead])
+async def bulk_update_status(
+    payload: BulkOrderStatusUpdate, db: AsyncSession = Depends(get_db)
+) -> List[DressOrder]:
+    """Advance several orders sitting at the same status together.
+
+    Useful when a batch of secondhand pieces has accumulated at one stage
+    (e.g. 20+ waiting at "arrived at shipping center") and all move to the
+    next stage at once, instead of clicking through each individually.
+    """
+    status = validate_status(payload.status)
+
+    orders = list(
+        (await db.scalars(select(DressOrder).where(DressOrder.id.in_(payload.order_ids)))).all()
+    )
+    found_ids = {o.id for o in orders}
+    missing = [oid for oid in payload.order_ids if oid not in found_ids]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Order(s) not found: {missing}")
+
+    current_statuses = {o.status for o in orders}
+    if len(current_statuses) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Selected orders aren't all at the same status: "
+                f"{', '.join(sorted(current_statuses))}"
+            ),
+        )
+
+    when = (
+        datetime.combine(payload.status_date, datetime.min.time())
+        if payload.status_date
+        else None
+    )
+    for order in orders:
+        order.status = status
+        stamp_status(order, status, when=when)
+
+    await db.commit()
+    for order in orders:
+        await db.refresh(order)
+    return orders
 
 
 @router.get("/{order_id}", response_model=OrderRead)

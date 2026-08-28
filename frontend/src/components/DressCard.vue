@@ -5,9 +5,16 @@ import { useInventoryStore } from '../stores/inventory'
 
 const props = defineProps({
   dress: { type: Object, required: true },
+  selectable: { type: Boolean, default: false },
+  selected: { type: Boolean, default: false },
 })
+const emit = defineEmits(['toggle-select'])
 
 const store = useInventoryStore()
+
+const detailRoute = computed(() =>
+  props.dress.category === 'secondhand' ? 'secondhand-detail' : 'dress-detail',
+)
 
 const badge = computed(() => {
   const d = props.dress
@@ -27,10 +34,22 @@ const toneClass = {
 
 <template>
   <RouterLink
-    :to="{ name: 'dress-detail', params: { id: dress.id } }"
-    class="group rounded-xl border border-stone-200 bg-white overflow-hidden hover:border-blush-300 hover:shadow-sm transition"
+    :to="{ name: detailRoute, params: { id: dress.id } }"
+    class="group relative rounded-xl border border-stone-200 bg-white overflow-hidden hover:border-blush-300 hover:shadow-sm transition"
     :class="{ 'opacity-60': dress.archived_at }"
   >
+    <button
+      v-if="selectable"
+      type="button"
+      :aria-pressed="selected"
+      :aria-label="selected ? 'Deselect' : 'Select'"
+      class="absolute top-2 left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white shadow text-xs leading-none"
+      :class="selected ? 'border-blush-600 bg-blush-600 text-white' : 'border-stone-300 text-transparent'"
+      @click.prevent.stop="emit('toggle-select', dress.id)"
+    >
+      ✓
+    </button>
+
     <div class="aspect-[3/4] bg-stone-100 flex items-center justify-center overflow-hidden">
       <img
         v-if="dress.photo_url"
