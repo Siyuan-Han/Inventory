@@ -45,6 +45,20 @@ watch(query, () => {
 
 watch([archived, supplier, status], refetch)
 
+// /dresses and /secondhand both render this same component, so Vue Router
+// reuses one instance across the two routes instead of remounting — the
+// category prop changes, but onMounted (below) only fires once. Without
+// this watcher, switching tabs would keep showing whichever list loaded
+// first, since nothing else re-triggers a fetch.
+watch(
+  () => props.category,
+  () => {
+    query.value = ''
+    store.fetchSuppliers(props.category).catch(() => {})
+    refetch()
+  },
+)
+
 function toggleArchived(value) {
   router.push({ name: listRouteName.value, query: { ...route.query, archived: value ? 'true' : undefined } })
 }

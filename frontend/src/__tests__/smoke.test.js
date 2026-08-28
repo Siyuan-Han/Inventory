@@ -453,6 +453,31 @@ describe('views and components render', () => {
     expect(wrapper.text()).toContain('Save changes')
   })
 
+  it('Dress list refetches when the category prop changes without remounting', async () => {
+    // /dresses and /secondhand render this same component, and Vue Router
+    // reuses one instance across the two routes rather than remounting it —
+    // this simulates exactly that (a prop change with no new mount).
+    const { api } = await import('../api')
+    const wrapper = await mountWith(DressListView, {
+      props: { category: 'new' },
+      route: '/dresses',
+    })
+    expect(api.listDresses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: 'new' }),
+    )
+
+    api.listDresses.mockResolvedValueOnce([SECONDHAND_DRESS])
+    await wrapper.setProps({ category: 'secondhand' })
+    await flushPromises()
+
+    expect(api.listDresses).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: 'secondhand' }),
+    )
+    expect(api.suppliers).toHaveBeenLastCalledWith('secondhand')
+    expect(wrapper.text()).toContain('SH001')
+    expect(wrapper.text()).not.toContain('WD001')
+  })
+
   it('Secondhand list only shows bulk-select once a status filter is active, and bulk-advances the selection', async () => {
     const { api } = await import('../api')
     api.listDresses.mockImplementation(async () => [SECONDHAND_DRESS])
