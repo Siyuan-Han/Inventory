@@ -30,6 +30,7 @@ const ORDER = {
   quantity: 2,
   unit_cost: '75.00',
   status: 'arrived_shipping_center',
+  tracking_number: null,
   notes: 'split shipment',
   ordered_at: '2026-08-01T10:00:00',
   shipped_from_factory_at: '2026-08-05T10:00:00',
@@ -266,6 +267,45 @@ describe('views and components render', () => {
       1,
       expect.objectContaining({ status: 'received', status_date: expect.any(String) }),
     )
+  })
+
+  it('Dress detail offers a tracking number field when advancing to shipped from factory', async () => {
+    const { api } = await import('../api')
+    api.getDress.mockResolvedValueOnce({
+      ...DRESS,
+      orders: [{ ...ORDER, status: 'ordered' }],
+    })
+    const wrapper = await mountWith(DressDetailView, {
+      props: { id: '1' },
+      route: '/dresses/1',
+    })
+
+    await wrapper.findAll('button').find((b) => b.text() === 'Mark shipped from factory').trigger('click')
+    const trackingInput = wrapper.find('input[placeholder="Tracking number (optional)"]')
+    expect(trackingInput.exists()).toBe(true)
+    await trackingInput.setValue('1Z999AA10123456784')
+
+    await wrapper.findAll('button').find((b) => b.text() === 'Confirm').trigger('click')
+    await flushPromises()
+    expect(api.updateOrder).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ status: 'shipped_from_factory', tracking_number: '1Z999AA10123456784' }),
+    )
+  })
+
+  it('Dress detail lets a tracking number be added or edited on its own', async () => {
+    const wrapper = await mountWith(DressDetailView, {
+      props: { id: '1' },
+      route: '/dresses/1',
+    })
+    const { api } = await import('../api')
+
+    // ORDER fixture has no tracking number yet, but is past shipped_from_factory.
+    await wrapper.findAll('button').find((b) => b.text() === '+ Add tracking number').trigger('click')
+    await wrapper.find('input[placeholder="Tracking number"]').setValue('TRACK-123')
+    await wrapper.findAll('button').find((b) => b.text() === 'Save').trigger('click')
+    await flushPromises()
+    expect(api.updateOrder).toHaveBeenCalledWith(1, { tracking_number: 'TRACK-123' })
   })
 
   it('Dress detail can archive a dress', async () => {

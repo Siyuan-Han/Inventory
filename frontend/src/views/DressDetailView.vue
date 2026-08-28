@@ -14,6 +14,8 @@ const showOrderForm = ref(false)
 const showSaleForm = ref(false)
 // Per-order state for the inline "pick a date, then advance" prompt.
 const advancing = reactive({})
+// Per-order state for the standalone tracking-number edit box.
+const trackingEdits = reactive({})
 
 const dress = computed(() => store.dress)
 const dressId = computed(() => Number(props.id ?? route.params.id))
@@ -63,7 +65,7 @@ function payment(sale) {
 }
 
 function openAdvance(order) {
-  advancing[order.id] = { date: today() }
+  advancing[order.id] = { date: today(), trackingNumber: order.tracking_number || '' }
 }
 
 function cancelAdvance(order) {
@@ -72,10 +74,27 @@ function cancelAdvance(order) {
 
 async function confirmAdvance(order) {
   const next = nextStatus(order)
-  const date = advancing[order.id]?.date
+  const { date, trackingNumber } = advancing[order.id] || {}
   if (!next) return
-  await store.setOrderStatus(order.id, next.value, dressId.value, date).catch(() => {})
+  const includeTracking = next.value === 'shipped_from_factory'
+  await store
+    .setOrderStatus(order.id, next.value, dressId.value, date, includeTracking ? trackingNumber?.trim() : undefined)
+    .catch(() => {})
   delete advancing[order.id]
+}
+
+function openTrackingEdit(order) {
+  trackingEdits[order.id] = order.tracking_number || ''
+}
+
+function cancelTrackingEdit(order) {
+  delete trackingEdits[order.id]
+}
+
+async function saveTracking(order) {
+  const value = trackingEdits[order.id]?.trim() || null
+  await store.updateOrder(order.id, dressId.value, { tracking_number: value }).catch(() => {})
+  delete trackingEdits[order.id]
 }
 
 async function removeOrder(order) {
@@ -254,6 +273,40 @@ watch(dressId, load)
 
         <p v-if="order.notes" class="text-sm text-stone-600">{{ order.notes }}</p>
 
+        <!-- Tracking number: editable any time once there's a factory shipment to track. -->
+        <div v-if="trackingEdits[order.id] !== undefined" class="flex flex-wrap items-center gap-2">
+          <input
+            v-model="trackingEdits[order.id]"
+            type="text"
+            placeholder="Tracking number"
+            class="rounded-lg border border-stone-300 px-2 py-1 text-sm"
+          />
+          <button
+            :disabled="store.saving"
+            class="rounded-lg bg-blush-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+            @click="saveTracking(order)"
+          >
+            Save
+          </button>
+          <button class="rounded-lg px-3 py-1 text-sm text-stone-500" @click="cancelTrackingEdit(order)">
+            Cancel
+          </button>
+        </div>
+        <p v-else-if="order.tracking_number" class="text-sm text-stone-600">
+          Tracking: <span class="font-medium">{{ order.tracking_number }}</span>
+          <button class="ml-2 text-xs text-stone-400 underline" @click="openTrackingEdit(order)">
+            Edit
+          </button>
+        </p>
+        <button
+          v-else-if="store.statusIndex(order.status) >= store.statusIndex('shipped_from_factory')"
+          type="button"
+          class="text-sm text-stone-400 underline"
+          @click="openTrackingEdit(order)"
+        >
+          + Add tracking number
+        </button>
+
         <div
           v-if="advancing[order.id]"
           class="flex flex-wrap items-center gap-2 rounded-lg bg-stone-50 border border-stone-200 p-2"
@@ -265,6 +318,13 @@ watch(dressId, load)
             v-model="advancing[order.id].date"
             type="date"
             class="rounded-lg border border-stone-300 px-2 py-1 text-sm"
+          />
+          <input
+            v-if="nextStatus(order).value === 'shipped_from_factory'"
+            v-model="advancing[order.id].trackingNumber"
+            type="text"
+            placeholder="Tracking number (optional)"
+            class="rounded-lg border border-stone-300 px-2 py-1 text-sm grow min-w-[10rem]"
           />
           <button
             :disabled="store.saving"

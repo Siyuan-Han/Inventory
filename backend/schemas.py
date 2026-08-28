@@ -84,6 +84,7 @@ class OrderUpdate(BaseModel):
     # The date the new status was actually reached, when different from
     # today (e.g. marking a shipment received a few days late).
     status_date: Optional[date] = None
+    tracking_number: Optional[str] = Field(default=None, max_length=100)
     notes: Optional[str] = None
     ordered_at: Optional[datetime] = None
     shipped_from_factory_at: Optional[datetime] = None
@@ -99,6 +100,7 @@ class OrderRead(ORMModel):
     quantity: Optional[int] = None
     unit_cost: Optional[Decimal] = None
     status: Optional[str] = None
+    tracking_number: Optional[str] = None
     notes: Optional[str] = None
     ordered_at: Optional[datetime] = None
     shipped_from_factory_at: Optional[datetime] = None

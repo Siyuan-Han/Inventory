@@ -139,9 +139,18 @@ export const useInventoryStore = defineStore('inventory', {
       }, { flag: 'saving' })
     },
 
-    async setOrderStatus(orderId, status, dressId, statusDate) {
+    async setOrderStatus(orderId, status, dressId, statusDate, trackingNumber) {
+      return this.updateOrder(orderId, dressId, {
+        status,
+        status_date: statusDate || undefined,
+        ...(trackingNumber !== undefined ? { tracking_number: trackingNumber || null } : {}),
+      })
+    },
+
+    /** Generic partial order update, e.g. { tracking_number } on its own. */
+    async updateOrder(orderId, dressId, patch) {
       return this.run(async () => {
-        await api.updateOrder(orderId, { status, status_date: statusDate || undefined })
+        await api.updateOrder(orderId, patch)
         await this.refreshDress(dressId)
       }, { flag: 'saving' })
     },

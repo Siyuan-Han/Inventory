@@ -50,6 +50,7 @@ class DressOrder(Base):
     status: Mapped[Optional[str]] = mapped_column(
         String(50), default="ordered", server_default="ordered"
     )
+    tracking_number: Mapped[Optional[str]] = mapped_column(String(100))
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
     ordered_at: Mapped[Optional[datetime]] = mapped_column(DateTime)

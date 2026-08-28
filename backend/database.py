@@ -51,3 +51,6 @@ async def init_db() -> None:
             await conn.execute(
                 text("ALTER TABLE sale ADD COLUMN IF NOT EXISTS cash_amount NUMERIC(10, 2)")
             )
+            await conn.execute(
+                text("ALTER TABLE dress_order ADD COLUMN IF NOT EXISTS tracking_number VARCHAR(100)")
+            )
