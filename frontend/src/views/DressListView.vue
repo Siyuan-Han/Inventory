@@ -75,12 +75,14 @@ function clearFilters() {
   router.push({ name: listRouteName.value, query: { archived: route.query.archived } })
 }
 
-// --- Bulk select (secondhand only): pick several pieces sitting at the same
-// status filter, then advance them all to the next stage together. ---
+// --- Bulk select: pick several dresses sitting at the same status filter,
+// then advance them all to the next stage together. Available on both
+// Dresses and Secondhand — for a "new" dress this acts on its most
+// recently created order, same one the status badge already reflects. ---
 const selectedIds = ref(new Set())
 const bulkDate = ref(new Date().toISOString().slice(0, 10))
 
-const canBulkSelect = computed(() => isSecondhand.value && Boolean(status.value) && !archived.value)
+const canBulkSelect = computed(() => Boolean(status.value) && !archived.value)
 const bulkTarget = computed(() => (status.value ? store.nextStatus(status.value) : null))
 const selectedCount = computed(() => selectedIds.value.size)
 const allVisibleSelected = computed(
@@ -204,7 +206,7 @@ onMounted(async () => {
     </div>
 
     <p v-if="canBulkSelect && !store.loading && store.dresses.length" class="text-xs text-stone-500">
-      Tap the circle on a piece to select it, then mark several as
+      Tap the circle on a dress to select it, then mark several as
       "{{ bulkTarget ? bulkTarget.label : '—' }}" together.
     </p>
 
@@ -243,10 +245,14 @@ onMounted(async () => {
       />
     </div>
 
-    <!-- Sticky bulk-action bar -->
+    <!-- Sticky bulk-action bar. Positioned above the fixed mobile tab bar
+         (App.vue) rather than guessing its pixel height, since that varies
+         by device (icon+label content plus the iOS home-indicator safe
+         area) — z-30 so it also wins the stacking order against the nav's
+         z-20 if the two ever do overlap on a very short viewport. -->
     <div
       v-if="canBulkSelect && selectedCount > 0"
-      class="fixed inset-x-0 bottom-16 sm:bottom-4 z-20 mx-auto w-full max-w-md px-4"
+      class="fixed inset-x-0 z-30 mx-auto w-full max-w-md px-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] sm:bottom-4"
     >
       <div class="flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-white p-3 shadow-lg">
         <button type="button" class="text-sm text-stone-500 underline" @click="toggleSelectAll">
@@ -261,7 +267,7 @@ onMounted(async () => {
         <button
           type="button"
           :disabled="store.saving || !bulkTarget"
-          class="grow rounded-lg bg-blush-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          class="w-full rounded-lg bg-blush-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
           @click="confirmBulkAdvance"
         >
           {{ store.saving ? 'Saving…' : `Mark as ${bulkTarget ? bulkTarget.label : '—'}` }}

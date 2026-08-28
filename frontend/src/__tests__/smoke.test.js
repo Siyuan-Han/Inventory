@@ -513,6 +513,31 @@ describe('views and components render', () => {
     api.listDresses.mockImplementation(async () => [DRESS])
   })
 
+  it('Bulk-select also works on the regular Dresses list, not just Secondhand', async () => {
+    const { api } = await import('../api')
+
+    const wrapper = await mountWith(DressListView, {
+      props: { category: 'new' },
+      route: '/dresses',
+    })
+    expect(wrapper.find('button[aria-label="Select"]').exists()).toBe(false)
+
+    const [, statusSelect] = wrapper.findAll('select')
+    await statusSelect.setValue('arrived_shipping_center') // matches DRESS.latest_status
+    await flushPromises()
+
+    await wrapper.find('button[aria-label="Select"]').trigger('click')
+    await flushPromises()
+
+    const markButton = wrapper.findAll('button').find((b) => b.text().startsWith('Mark as'))
+    await markButton.trigger('click')
+    await flushPromises()
+
+    expect(api.bulkUpdateOrderStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ order_ids: [1], status: 'received' }),
+    )
+  })
+
   it('Add secondhand dress form submits the dress and its one order together', async () => {
     const wrapper = await mountWith(AddSecondhandDressView, { route: '/secondhand/new' })
     const { api } = await import('../api')
