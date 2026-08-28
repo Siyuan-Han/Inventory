@@ -43,11 +43,19 @@ const toneClass = {
       type="button"
       :aria-pressed="selected"
       :aria-label="selected ? 'Deselect' : 'Select'"
-      class="absolute top-2 left-2 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white shadow text-xs leading-none"
-      :class="selected ? 'border-blush-600 bg-blush-600 text-white' : 'border-stone-300 text-transparent'"
+      class="absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 shadow transition-colors"
+      :class="selected ? 'border-blush-600 bg-blush-600' : 'border-stone-300 bg-white/90'"
       @click.prevent.stop="emit('toggle-select', dress.id)"
     >
-      ✓
+      <svg v-if="selected" viewBox="0 0 20 20" fill="none" class="h-4 w-4">
+        <path
+          d="M4.5 10.5l3.5 3.5 7.5-8.5"
+          stroke="white"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
     </button>
 
     <div class="aspect-[3/4] bg-stone-100 flex items-center justify-center overflow-hidden">
