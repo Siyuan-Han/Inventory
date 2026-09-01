@@ -14,8 +14,14 @@ import AddSecondhandDressView from '../views/AddSecondhandDressView.vue'
 import DressCard from '../components/DressCard.vue'
 import OrderForm from '../components/OrderForm.vue'
 import SaleForm from '../components/SaleForm.vue'
+import TryOnForm from '../components/TryOnForm.vue'
 import ComboBox from '../components/ComboBox.vue'
 import { useInventoryStore } from '../stores/inventory'
+
+const PARTNERS = [
+  { value: 'camille', label: 'Camille' },
+  { value: 'zoe', label: 'Zoe' },
+]
 
 const STATUSES = [
   { value: 'ordered', label: 'Ordered', field: 'ordered_at' },
@@ -63,8 +69,21 @@ const SPLIT_SALE = {
   sale_price: '200.00',
   is_cash: false,
   cash_amount: '120.00',
+  received_by: 'camille',
   notes: null,
   created_at: '2026-08-19T10:00:00',
+}
+
+const TRYON = {
+  id: 1,
+  dress_id: 1,
+  tryon_date: '2026-08-17',
+  fee: '25.00',
+  is_cash: true,
+  cash_amount: null,
+  received_by: 'zoe',
+  notes: null,
+  created_at: '2026-08-17T10:00:00',
 }
 
 const DRESS = {
@@ -83,12 +102,14 @@ const DRESS = {
   in_stock: 0,
   pending_orders: 1,
   total_revenue: '400.00',
+  tryon_revenue: '25.00',
   total_cost: '150.00',
   latest_status: 'arrived_shipping_center',
   latest_order_id: 1,
   latest_tracking_number: null,
   orders: [ORDER],
   sales: [SALE, SPLIT_SALE],
+  try_ons: [TRYON],
 }
 
 const SECONDHAND_ORDER = {
@@ -125,12 +146,14 @@ const SECONDHAND_DRESS = {
   in_stock: 0,
   pending_orders: 1,
   total_revenue: '0',
+  tryon_revenue: '0',
   total_cost: '90.00',
   latest_status: 'arrived_shipping_center',
   latest_order_id: 10,
   latest_tracking_number: 'SH-TRACK-1',
   orders: [SECONDHAND_ORDER],
   sales: [],
+  try_ons: [],
 }
 
 const STATS = {
@@ -141,12 +164,14 @@ const STATS = {
   in_stock: 0,
   pending_orders: 1,
   total_revenue: '600.00',
+  tryon_revenue: '25.00',
+  tryon_count: 1,
   total_cost: '150.00',
   cost_of_goods_sold: '150.00',
   inventory_value: '0',
-  profit: '450.00',
+  profit: '475.00',
   cash_sales: 1,
-  cash_revenue: '520.00',
+  cash_revenue: '545.00',
   card_revenue: '80.00',
   status_breakdown: {
     ordered: 0,
@@ -161,17 +186,40 @@ const MONTHLY_STATS = {
   orders_count: 1,
   sales_count: 2,
   revenue: '600.00',
+  tryon_revenue: '25.00',
+  tryon_count: 1,
   cost: '150.00',
   inventory_spend: '75.00',
-  profit: '450.00',
+  profit: '475.00',
   cash_sales: 1,
-  cash_revenue: '520.00',
+  cash_revenue: '545.00',
   card_revenue: '80.00',
+}
+
+const SETTLEMENT_SUMMARY = {
+  positions: [
+    { partner: 'camille', label: 'Camille', cash_collected: '965.00', settlements_paid: '0', settlements_received: '0', net_position: '965.00' },
+    { partner: 'zoe', label: 'Zoe', cash_collected: '840.00', settlements_paid: '0', settlements_received: '0', net_position: '840.00' },
+  ],
+  unattributed_cash: '30.00',
+  to_equalize: '62.50',
+  equalize_direction: 'camille_to_zoe',
+}
+
+const SETTLEMENT = {
+  id: 1,
+  settlement_date: '2026-08-15',
+  amount: '62.50',
+  paid_by: 'camille',
+  paid_to: 'zoe',
+  notes: null,
+  created_at: '2026-08-15T10:00:00',
 }
 
 vi.mock('../api', () => {
   const api = {
     statuses: vi.fn(async () => STATUSES),
+    partners: vi.fn(async () => PARTNERS),
     stats: vi.fn(async () => STATS),
     monthlyStats: vi.fn(async () => MONTHLY_STATS),
     listDresses: vi.fn(async () => [DRESS]),
@@ -191,7 +239,16 @@ vi.mock('../api', () => {
     bulkUpdateOrderStatus: vi.fn(async () => [SECONDHAND_ORDER]),
     listSales: vi.fn(async () => [SALE]),
     createSale: vi.fn(async () => SALE),
+    updateSale: vi.fn(async () => SALE),
     deleteSale: vi.fn(async () => null),
+    listTryOns: vi.fn(async () => [TRYON]),
+    createTryOn: vi.fn(async () => TRYON),
+    updateTryOn: vi.fn(async () => TRYON),
+    deleteTryOn: vi.fn(async () => null),
+    settlementSummary: vi.fn(async () => SETTLEMENT_SUMMARY),
+    listSettlements: vi.fn(async () => [SETTLEMENT]),
+    createSettlement: vi.fn(async () => SETTLEMENT),
+    deleteSettlement: vi.fn(async () => null),
   }
   return { api, default: api }
 })
@@ -240,23 +297,51 @@ describe('views and components render', () => {
   it('Dashboard shows stat cards, cash/card revenue, the pipeline and a month dropdown', async () => {
     const wrapper = await mountWith(DashboardView)
     expect(wrapper.text()).toContain('Dresses')
-    expect(wrapper.text()).toContain('$600.00') // all-time revenue
+    expect(wrapper.text()).toContain('$600.00') // all-time sale revenue
     expect(wrapper.text()).toContain('Cost')
     expect(wrapper.text()).toContain('sold dresses only')
     expect(wrapper.text()).toContain('Inventory')
     expect(wrapper.text()).toContain('unsold stock, at cost')
-    expect(wrapper.text()).toContain('$450.00') // all-time profit (revenue - cost of goods sold)
+    expect(wrapper.text()).toContain('$475.00') // all-time profit (revenue - cost + try-on fees)
     expect(wrapper.text()).toContain('Revenue by payment')
-    expect(wrapper.text()).toContain('$520.00') // cash
+    expect(wrapper.text()).toContain('$545.00') // cash, includes try-on cash
     expect(wrapper.text()).toContain('$80.00') // card
+    expect(wrapper.text()).toContain('$25.00 in try-on fees')
     expect(wrapper.text()).toContain('Shipped from shipping center')
     expect(wrapper.text()).toContain('Monthly summary')
     expect(wrapper.text()).toContain('$75.00') // monthly inventory spend
     expect(wrapper.text()).toContain('spent on new stock')
     expect(wrapper.text()).toContain('2 sale(s)')
+    expect(wrapper.text()).toContain('1 try-on(s)')
     // Month picker is a dropdown, not prev/next arrows.
     const select = wrapper.findAll('select').at(-1)
     expect(select.findAll('option').length).toBeGreaterThan(1)
+  })
+
+  it('Dashboard shows each partner\'s cash position and the amount to equalize', async () => {
+    const wrapper = await mountWith(DashboardView)
+    expect(wrapper.text()).toContain('Cash settlement')
+    expect(wrapper.text()).toContain('Camille')
+    expect(wrapper.text()).toContain('Zoe')
+    expect(wrapper.text()).toContain('$965.00')
+    expect(wrapper.text()).toContain('$840.00')
+    expect(wrapper.text()).toContain('Camille owes Zoe $62.50 to equalize.')
+    expect(wrapper.text()).toContain('$30.00 in cash sales/try-ons predate')
+  })
+
+  it('Dashboard records a settlement prefilled from the suggested equalize direction', async () => {
+    const wrapper = await mountWith(DashboardView)
+    const { api } = await import('../api')
+
+    await wrapper.findAll('button').find((b) => b.text() === 'Record settlement').trigger('click')
+    const amountInput = wrapper.find('form input[type="number"]')
+    expect(Number(amountInput.element.value)).toBe(62.5)
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(api.createSettlement).toHaveBeenCalledWith(
+      expect.objectContaining({ paid_by: 'camille', paid_to: 'zoe', amount: 62.5 }),
+    )
   })
 
   it('Dress list renders a card per dress and toggles archived', async () => {
@@ -377,7 +462,7 @@ describe('views and components render', () => {
     expect(api.archiveDress).toHaveBeenCalledWith(1)
   })
 
-  it('Dress detail opens the order and sale modals', async () => {
+  it('Dress detail opens the order, sale and try-on modals', async () => {
     const wrapper = await mountWith(DressDetailView, {
       props: { id: '1' },
       route: '/dresses/1',
@@ -388,6 +473,39 @@ describe('views and components render', () => {
 
     await buttons.find((b) => b.text() === 'Record sale').trigger('click')
     expect(wrapper.findComponent(SaleForm).exists()).toBe(true)
+
+    await wrapper.findAll('button').find((b) => b.text() === 'Record try-on').trigger('click')
+    expect(wrapper.findComponent(TryOnForm).exists()).toBe(true)
+  })
+
+  it('Dress detail renders the try-ons section with fee, payment and partner', async () => {
+    const wrapper = await mountWith(DressDetailView, {
+      props: { id: '1' },
+      route: '/dresses/1',
+    })
+    expect(wrapper.text()).toContain('Try-ons')
+    expect(wrapper.text()).toContain('$25.00')
+    expect(wrapper.text()).toContain('Zoe')
+    expect(wrapper.text()).toContain('Try-on fees')
+  })
+
+  it('TryOnForm records a cash try-on with the receiving partner', async () => {
+    const wrapper = mount(TryOnForm, {
+      props: { dressId: 1 },
+      global: { plugins: [createPinia()] },
+    })
+    const { api } = await import('../api')
+    await flushPromises()
+
+    await wrapper.find('input[type="date"]').setValue('2026-08-20')
+    await wrapper.find('input[type="number"]').setValue('25')
+    await wrapper.findAll('button').find((b) => b.text() === 'Zoe').trigger('click')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(api.createTryOn).toHaveBeenCalledWith(
+      expect.objectContaining({ dress_id: 1, fee: 25, is_cash: true, received_by: 'zoe' }),
+    )
   })
 
   it('SaleForm order options omit the raw order id', async () => {
@@ -416,11 +534,31 @@ describe('views and components render', () => {
     await cashInput.setValue('120')
     expect(wrapper.text()).toContain('$80.00 card')
 
+    await flushPromises() // let the partner list load before selecting one
+    await wrapper.findAll('button').find((b) => b.text() === 'Camille').trigger('click')
+
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(api.createSale).toHaveBeenCalledWith(
-      expect.objectContaining({ sale_price: 200, cash_amount: 120 }),
+      expect.objectContaining({ sale_price: 200, cash_amount: 120, received_by: 'camille' }),
     )
+  })
+
+  it('SaleForm blocks submit when cash is involved but no partner is chosen', async () => {
+    const wrapper = mount(SaleForm, {
+      props: { dressId: 1, orders: [] },
+      global: { plugins: [createPinia()] },
+    })
+    const { api } = await import('../api')
+    api.createSale.mockClear()
+
+    await wrapper.find('input[type="date"]').setValue('2026-08-19')
+    const [priceInput] = wrapper.findAll('input[type="number"]')
+    await priceInput.setValue('200')
+
+    await wrapper.find('form').trigger('submit')
+    expect(wrapper.text()).toContain('Choose who received the cash.')
+    expect(api.createSale).not.toHaveBeenCalled()
   })
 
   it('Add dress form shows a server-assigned code and does not require typing one', async () => {
@@ -594,13 +732,15 @@ describe('views and components render', () => {
       props: { dress: SECONDHAND_DRESS }, // latest_tracking_number: 'SH-TRACK-1', not received
       global: { plugins: [createPinia(), makeRouter()] },
     })
-    expect(inTransit.text()).toContain('Tracking: SH-TRACK-1')
+    // No "Tracking:" label — just the number, so it isn't truncated on a phone.
+    expect(inTransit.text()).toContain('SH-TRACK-1')
+    expect(inTransit.text()).not.toContain('Tracking:')
 
     const received = mount(DressCard, {
       props: { dress: { ...SECONDHAND_DRESS, latest_status: 'received', latest_tracking_number: null } },
       global: { plugins: [createPinia(), makeRouter()] },
     })
-    expect(received.text()).not.toContain('Tracking:')
+    expect(received.text()).not.toContain('SH-TRACK-1')
   })
 })
 

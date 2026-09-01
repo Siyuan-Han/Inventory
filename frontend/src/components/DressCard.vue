@@ -71,7 +71,7 @@ const toneClass = {
 
     <div class="p-3 space-y-1.5">
       <p v-if="dress.latest_tracking_number" class="text-xs text-stone-500 truncate">
-        Tracking: {{ dress.latest_tracking_number }}
+        {{ dress.latest_tracking_number }}
       </p>
       <div class="flex items-baseline justify-between gap-2">
         <p class="font-medium text-sm">{{ dress.dress_code }}</p>

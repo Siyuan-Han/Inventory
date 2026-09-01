@@ -6,14 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from models import Dress, DressOrder, Sale
+from payments import check_cash_amount, require_received_by, validate_partner
 from schemas import SaleCreate, SaleRead, SaleUpdate
 
 router = APIRouter(prefix="/sales", tags=["sales"])
-
-
-def check_cash_amount(cash_amount, sale_price) -> None:
-    if cash_amount is not None and sale_price is not None and cash_amount > sale_price:
-        raise HTTPException(status_code=422, detail="cash_amount cannot exceed sale_price")
 
 
 async def get_or_404(db: AsyncSession, sale_id: int) -> Sale:
@@ -55,6 +51,10 @@ async def create_sale(payload: SaleCreate, db: AsyncSession = Depends(get_db)) -
         # instead of trusting a client-sent value that could disagree.
         data["is_cash"] = payload.sale_price is not None and payload.cash_amount >= payload.sale_price
 
+    if data.get("received_by") is not None:
+        data["received_by"] = validate_partner(data["received_by"])
+    require_received_by(data["is_cash"], data.get("cash_amount"), data.get("received_by"))
+
     sale = Sale(**data)
     db.add(sale)
     await db.commit()
@@ -75,6 +75,13 @@ async def update_sale(
         check_cash_amount(sale.cash_amount, sale.sale_price)
         if "is_cash" not in changes:
             sale.is_cash = sale.sale_price is not None and sale.cash_amount >= sale.sale_price
+    if "received_by" in changes and sale.received_by is not None:
+        validate_partner(sale.received_by)
+    # Only enforce on rows whose payment fields this request actually
+    # touched — an unrelated edit (e.g. notes) on a sale that predates this
+    # field, or was left card-only, shouldn't suddenly start 422ing.
+    if changes.keys() & {"is_cash", "cash_amount", "received_by"}:
+        require_received_by(sale.is_cash, sale.cash_amount, sale.received_by)
 
     await db.commit()
     await db.refresh(sale)

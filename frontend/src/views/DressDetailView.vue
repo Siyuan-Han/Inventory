@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useInventoryStore } from '../stores/inventory'
 import OrderForm from '../components/OrderForm.vue'
 import SaleForm from '../components/SaleForm.vue'
+import TryOnForm from '../components/TryOnForm.vue'
 
 const props = defineProps({ id: { type: [String, Number], required: true } })
 const route = useRoute()
@@ -12,6 +13,7 @@ const store = useInventoryStore()
 
 const showOrderForm = ref(false)
 const showSaleForm = ref(false)
+const showTryOnForm = ref(false)
 // Per-order state for the inline "pick a date, then advance" prompt.
 const advancing = reactive({})
 // Per-order state for the standalone tracking-number edit box.
@@ -47,16 +49,14 @@ function orderLabel(orderId) {
   return order ? `order from ${order.order_date}` : 'a linked order'
 }
 
-/** How a sale was paid: fully cash, fully card, or a cash/card split. */
-function payment(sale) {
-  const price = Number(sale.sale_price) || 0
-  if (sale.cash_amount === null || sale.cash_amount === undefined) {
-    return sale.is_cash
-      ? { label: 'Cash', tone: 'emerald' }
-      : { label: 'Card', tone: 'stone' }
+/** How a sale/try-on was paid: fully cash, fully card, or a cash/card split. */
+function payment({ amount, is_cash, cash_amount }) {
+  const total = Number(amount) || 0
+  if (cash_amount === null || cash_amount === undefined) {
+    return is_cash ? { label: 'Cash', tone: 'emerald' } : { label: 'Card', tone: 'stone' }
   }
-  const cash = Number(sale.cash_amount)
-  const card = Math.max(0, price - cash)
+  const cash = Number(cash_amount)
+  const card = Math.max(0, total - cash)
   if (cash <= 0) return { label: 'Card', tone: 'stone' }
   if (card <= 0) return { label: 'Cash', tone: 'emerald' }
   return { label: `${money(cash)} cash + ${money(card)} card`, tone: 'amber' }
@@ -105,6 +105,11 @@ async function removeSale(sale) {
   await store.deleteSale(sale.id, dressId.value).catch(() => {})
 }
 
+async function removeTryOn(tryon) {
+  if (!confirm(`Delete the try-on from ${tryon.tryon_date}?`)) return
+  await store.deleteTryOn(tryon.id, dressId.value).catch(() => {})
+}
+
 async function removeDress() {
   if (!confirm(`Delete ${dress.value.dress_code} and all its orders and sales?`)) return
   const listRoute = dress.value.category === 'secondhand' ? 'secondhand' : 'dresses'
@@ -123,6 +128,7 @@ async function restoreDress() {
 
 async function load() {
   await store.loadStatuses().catch(() => {})
+  await store.loadPartners().catch(() => {})
   await store.fetchDress(dressId.value).catch(() => {})
 }
 
@@ -183,6 +189,10 @@ watch(dressId, load)
           <div>
             <dt class="text-stone-500">Order cost</dt>
             <dd class="tabular-nums">{{ money(dress.total_cost) }}</dd>
+          </div>
+          <div>
+            <dt class="text-stone-500">Try-on fees</dt>
+            <dd class="tabular-nums">{{ money(dress.tryon_revenue) }}</dd>
           </div>
         </dl>
 
@@ -382,19 +392,75 @@ watch(dressId, load)
             <p v-if="sale.notes" class="text-xs text-stone-500 truncate">{{ sale.notes }}</p>
           </div>
           <span
+            v-if="sale.received_by"
+            class="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500"
+          >
+            {{ store.partnerLabel(sale.received_by) }}
+          </span>
+          <span
             class="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
             :class="{
               emerald: 'bg-emerald-50 text-emerald-700',
               stone: 'bg-stone-100 text-stone-600',
               amber: 'bg-amber-50 text-amber-700',
-            }[payment(sale).tone]"
+            }[payment({ amount: sale.sale_price, is_cash: sale.is_cash, cash_amount: sale.cash_amount }).tone]"
           >
-            {{ payment(sale).label }}
+            {{ payment({ amount: sale.sale_price, is_cash: sale.is_cash, cash_amount: sale.cash_amount }).label }}
           </span>
           <button
             :disabled="store.saving"
             class="shrink-0 text-sm text-stone-400 hover:text-blush-700 disabled:opacity-50"
             @click="removeSale(sale)"
+          >
+            ✕
+          </button>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Try-ons -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold">Try-ons</h2>
+        <button
+          class="rounded-lg bg-blush-600 px-3 py-1.5 text-sm text-white hover:bg-blush-700"
+          @click="showTryOnForm = true"
+        >
+          Record try-on
+        </button>
+      </div>
+
+      <p v-if="!dress.try_ons.length" class="text-sm text-stone-500">No try-ons yet.</p>
+
+      <ul v-else class="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
+        <li v-for="tryon in dress.try_ons" :key="tryon.id" class="p-3 flex items-center gap-3">
+          <div class="grow min-w-0">
+            <p class="text-sm">
+              <span class="font-medium tabular-nums">{{ money(tryon.fee) }}</span>
+              <span class="text-stone-500"> · {{ tryon.tryon_date }}</span>
+            </p>
+            <p v-if="tryon.notes" class="text-xs text-stone-500 truncate">{{ tryon.notes }}</p>
+          </div>
+          <span
+            v-if="tryon.received_by"
+            class="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500"
+          >
+            {{ store.partnerLabel(tryon.received_by) }}
+          </span>
+          <span
+            class="shrink-0 rounded-full px-2 py-0.5 text-[11px]"
+            :class="{
+              emerald: 'bg-emerald-50 text-emerald-700',
+              stone: 'bg-stone-100 text-stone-600',
+              amber: 'bg-amber-50 text-amber-700',
+            }[payment({ amount: tryon.fee, is_cash: tryon.is_cash, cash_amount: tryon.cash_amount }).tone]"
+          >
+            {{ payment({ amount: tryon.fee, is_cash: tryon.is_cash, cash_amount: tryon.cash_amount }).label }}
+          </span>
+          <button
+            :disabled="store.saving"
+            class="shrink-0 text-sm text-stone-400 hover:text-blush-700 disabled:opacity-50"
+            @click="removeTryOn(tryon)"
           >
             ✕
           </button>
@@ -415,6 +481,12 @@ watch(dressId, load)
       :orders="dress.orders"
       @close="showSaleForm = false"
       @saved="showSaleForm = false"
+    />
+    <TryOnForm
+      v-if="showTryOnForm"
+      :dress-id="dress.id"
+      @close="showTryOnForm = false"
+      @saved="showTryOnForm = false"
     />
   </section>
 

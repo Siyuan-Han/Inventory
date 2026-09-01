@@ -8,6 +8,9 @@ export const useInventoryStore = defineStore('inventory', {
     stats: null,
     monthlyStats: null,
     statuses: [],
+    partners: [],
+    settlementSummary: null,
+    settlements: [],
     suppliers: [],
     search: '',
     showArchived: false,
@@ -27,6 +30,8 @@ export const useInventoryStore = defineStore('inventory', {
       const index = state.statuses.findIndex((s) => s.value === value)
       return index >= 0 && index < state.statuses.length - 1 ? state.statuses[index + 1] : null
     },
+    partnerLabel: (state) => (value) =>
+      state.partners.find((p) => p.value === value)?.label || value || '—',
   },
 
   actions: {
@@ -48,6 +53,12 @@ export const useInventoryStore = defineStore('inventory', {
       if (this.statuses.length) return this.statuses
       this.statuses = await api.statuses()
       return this.statuses
+    },
+
+    async loadPartners() {
+      if (this.partners.length) return this.partners
+      this.partners = await api.partners()
+      return this.partners
     },
 
     async nextDressCode(category) {
@@ -203,11 +214,56 @@ export const useInventoryStore = defineStore('inventory', {
       }, { flag: 'saving' })
     },
 
+    async createTryOn(data) {
+      return this.run(async () => {
+        await api.createTryOn(data)
+        await this.refreshDress(data.dress_id)
+      }, { flag: 'saving' })
+    },
+
+    async deleteTryOn(tryonId, dressId) {
+      return this.run(async () => {
+        await api.deleteTryOn(tryonId)
+        await this.refreshDress(dressId)
+      }, { flag: 'saving' })
+    },
+
+    async fetchSettlementSummary() {
+      return this.run(async () => {
+        this.settlementSummary = await api.settlementSummary()
+        return this.settlementSummary
+      })
+    },
+
+    async fetchSettlements() {
+      return this.run(async () => {
+        this.settlements = await api.listSettlements()
+        return this.settlements
+      })
+    },
+
+    async createSettlement(data) {
+      return this.run(async () => {
+        await api.createSettlement(data)
+        await this.fetchSettlementSummary()
+        await this.fetchSettlements()
+      }, { flag: 'saving' })
+    },
+
+    async deleteSettlement(id) {
+      return this.run(async () => {
+        await api.deleteSettlement(id)
+        await this.fetchSettlementSummary()
+        await this.fetchSettlements()
+      }, { flag: 'saving' })
+    },
+
     /** Re-read one dress and keep the cached list row in sync with it. */
     async refreshDress(dressId) {
       this.dress = await api.getDress(dressId)
       this.replaceInList(this.dress)
       this.stats = null // rollups changed; the dashboard will refetch
+      this.monthlyStats = null
       return this.dress
     },
 

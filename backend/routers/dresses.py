@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import Dress, DressOrder, Sale
+from models import Dress, DressOrder, Sale, TryOn
 from rollups import dress_rollup
 from routers.orders import stamp_status, validate_status
 from schemas import (
@@ -69,7 +69,7 @@ async def load_dress(db: AsyncSession, dress_id: int) -> Dress:
     """Fetch one dress with its orders and sales freshly loaded."""
     stmt = (
         select(Dress)
-        .options(selectinload(Dress.orders), selectinload(Dress.sales))
+        .options(selectinload(Dress.orders), selectinload(Dress.sales), selectinload(Dress.try_ons))
         .where(Dress.id == dress_id)
         .execution_options(populate_existing=True)
     )
@@ -124,7 +124,7 @@ async def list_dresses(
         )
     stmt = (
         select(Dress)
-        .options(selectinload(Dress.orders), selectinload(Dress.sales))
+        .options(selectinload(Dress.orders), selectinload(Dress.sales), selectinload(Dress.try_ons))
         .order_by(Dress.dress_code)
     )
     stmt = stmt.where(Dress.archived_at.isnot(None) if archived else Dress.archived_at.is_(None))
@@ -255,8 +255,11 @@ async def delete_dress(dress_id: int, db: AsyncSession = Depends(get_db)) -> Non
         raise HTTPException(status_code=404, detail=f"Dress {dress_id} not found")
 
     # sale.order_id has no ON DELETE action, so children must go in dependency
-    # order: sales, then orders, then the dress itself.
+    # order: sales/try-ons, then orders, then the dress itself. This bulk
+    # delete bypasses the ORM's own relationship cascades, so both need an
+    # explicit line here.
     await db.execute(delete(Sale).where(Sale.dress_id == dress_id))
+    await db.execute(delete(TryOn).where(TryOn.dress_id == dress_id))
     await db.execute(delete(DressOrder).where(DressOrder.dress_id == dress_id))
     await db.execute(delete(Dress).where(Dress.id == dress_id))
     await db.commit()

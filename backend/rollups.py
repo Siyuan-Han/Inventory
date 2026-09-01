@@ -1,10 +1,11 @@
-"""Derived inventory numbers computed from a dress's orders and sales."""
+"""Derived inventory numbers computed from a dress's orders, sales and try-ons."""
 
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Tuple
 
-from models import Dress, Sale
+from models import Dress, Sale, TryOn
+from payments import payment_split
 
 
 def _d(value: Any) -> Decimal:
@@ -12,17 +13,13 @@ def _d(value: Any) -> Decimal:
 
 
 def sale_payment_split(sale: Sale) -> Tuple[Decimal, Decimal]:
-    """(cash, card) portions of a sale's price.
+    """(cash, card) portions of a sale's price. See payments.payment_split."""
+    return payment_split(sale.sale_price, sale.is_cash, sale.cash_amount)
 
-    `cash_amount` is the source of truth when set (supports part-cash,
-    part-card sales); otherwise the sale is treated as fully cash or fully
-    card based on the older `is_cash` flag.
-    """
-    price = _d(sale.sale_price)
-    if sale.cash_amount is not None:
-        cash = min(_d(sale.cash_amount), price)
-        return cash, price - cash
-    return (price, Decimal("0")) if sale.is_cash else (Decimal("0"), price)
+
+def tryon_payment_split(tryon: TryOn) -> Tuple[Decimal, Decimal]:
+    """(cash, card) portions of a try-on fee. See payments.payment_split."""
+    return payment_split(tryon.fee, tryon.is_cash, tryon.cash_amount)
 
 
 def sale_cost_map(dress: Dress) -> Dict[int, Decimal]:
@@ -70,6 +67,7 @@ def dress_rollup(dress: Dress) -> Dict[str, Any]:
     pending_orders = sum(1 for o in orders if o.status != "received")
 
     total_revenue = sum((_d(s.sale_price) for s in sales), Decimal("0"))
+    tryon_revenue = sum((_d(t.fee) for t in dress.try_ons or []), Decimal("0"))
     total_cost = sum(
         (
             _d(o.unit_cost if o.unit_cost is not None else dress.base_cost) * (o.quantity or 0)
@@ -96,6 +94,7 @@ def dress_rollup(dress: Dress) -> Dict[str, Any]:
         "in_stock": total_received - total_sold,
         "pending_orders": pending_orders,
         "total_revenue": total_revenue,
+        "tryon_revenue": tryon_revenue,
         "total_cost": total_cost,
         "cost_of_goods_sold": cost_of_goods_sold,
         "inventory_value": inventory_value,

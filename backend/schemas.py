@@ -164,6 +164,9 @@ class SaleBase(BaseModel):
     # How much of sale_price was cash; the remainder is card. Omit for a
     # sale that's simply all-cash (is_cash=true) or all-card (is_cash=false).
     cash_amount: Optional[Decimal] = Field(default=None, ge=0)
+    # Which partner (see PARTNERS in payments.py) physically received the
+    # cash. Required by the API whenever any part of the sale is cash.
+    received_by: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -177,6 +180,7 @@ class SaleUpdate(BaseModel):
     sale_price: Optional[Decimal] = Field(default=None, ge=0)
     is_cash: Optional[bool] = None
     cash_amount: Optional[Decimal] = Field(default=None, ge=0)
+    received_by: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -188,8 +192,88 @@ class SaleRead(ORMModel):
     sale_price: Optional[Decimal] = None
     is_cash: Optional[bool] = None
     cash_amount: Optional[Decimal] = None
+    received_by: Optional[str] = None
     notes: Optional[str] = None
     created_at: Optional[datetime] = None
+
+
+# --------------------------------------------------------------------------
+# TryOn
+# --------------------------------------------------------------------------
+class TryOnBase(BaseModel):
+    dress_id: int
+    tryon_date: date
+    fee: Optional[Decimal] = Field(default=None, ge=0)
+    is_cash: bool = False
+    cash_amount: Optional[Decimal] = Field(default=None, ge=0)
+    received_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TryOnCreate(TryOnBase):
+    pass
+
+
+class TryOnUpdate(BaseModel):
+    tryon_date: Optional[date] = None
+    fee: Optional[Decimal] = Field(default=None, ge=0)
+    is_cash: Optional[bool] = None
+    cash_amount: Optional[Decimal] = Field(default=None, ge=0)
+    received_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TryOnRead(ORMModel):
+    id: int
+    dress_id: Optional[int] = None
+    tryon_date: date
+    fee: Optional[Decimal] = None
+    is_cash: Optional[bool] = None
+    cash_amount: Optional[Decimal] = None
+    received_by: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+# --------------------------------------------------------------------------
+# Settlement
+# --------------------------------------------------------------------------
+class SettlementBase(BaseModel):
+    settlement_date: date
+    amount: Decimal = Field(ge=0)
+    paid_by: str
+    paid_to: str
+    notes: Optional[str] = None
+
+
+class SettlementCreate(SettlementBase):
+    pass
+
+
+class SettlementRead(ORMModel):
+    id: int
+    settlement_date: date
+    amount: Decimal
+    paid_by: str
+    paid_to: str
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class PartnerCashPosition(BaseModel):
+    partner: str
+    label: str
+    cash_collected: Decimal = Decimal("0")
+    settlements_paid: Decimal = Decimal("0")
+    settlements_received: Decimal = Decimal("0")
+    net_position: Decimal = Decimal("0")
+
+
+class SettlementSummary(BaseModel):
+    positions: List[PartnerCashPosition] = []
+    unattributed_cash: Decimal = Decimal("0")
+    to_equalize: Decimal = Decimal("0")
+    equalize_direction: Optional[str] = None  # "camille_to_zoe" | "zoe_to_camille" | None
 
 
 # --------------------------------------------------------------------------
@@ -213,6 +297,7 @@ class DressRead(ORMModel):
     in_stock: int = 0
     pending_orders: int = 0
     total_revenue: Decimal = Decimal("0")
+    tryon_revenue: Decimal = Decimal("0")
     total_cost: Decimal = Decimal("0")
     latest_status: Optional[str] = None
     latest_order_id: Optional[int] = None
@@ -222,6 +307,7 @@ class DressRead(ORMModel):
 class DressDetail(DressRead):
     orders: List[OrderRead] = []
     sales: List[SaleRead] = []
+    try_ons: List[TryOnRead] = []
 
 
 class DashboardStats(BaseModel):
@@ -231,14 +317,16 @@ class DashboardStats(BaseModel):
     total_sold: int = 0
     in_stock: int = 0
     pending_orders: int = 0
-    total_revenue: Decimal = Decimal("0")
+    total_revenue: Decimal = Decimal("0")  # sale revenue only
+    tryon_revenue: Decimal = Decimal("0")
+    tryon_count: int = 0
     total_cost: Decimal = Decimal("0")  # cost of everything ordered, sold or not
     cost_of_goods_sold: Decimal = Decimal("0")  # buying cost of sold dresses only
     inventory_value: Decimal = Decimal("0")  # buying cost still sitting unsold
-    profit: Decimal = Decimal("0")  # total_revenue - cost_of_goods_sold
+    profit: Decimal = Decimal("0")  # total_revenue - cost_of_goods_sold + tryon_revenue
     cash_sales: int = 0
-    cash_revenue: Decimal = Decimal("0")
-    card_revenue: Decimal = Decimal("0")
+    cash_revenue: Decimal = Decimal("0")  # sales + try-ons
+    card_revenue: Decimal = Decimal("0")  # sales + try-ons
     status_breakdown: dict = {}
 
 
@@ -246,13 +334,15 @@ class MonthlyStats(BaseModel):
     month: str  # "YYYY-MM"
     orders_count: int = 0
     sales_count: int = 0
-    revenue: Decimal = Decimal("0")
+    revenue: Decimal = Decimal("0")  # sale revenue only
+    tryon_revenue: Decimal = Decimal("0")
+    tryon_count: int = 0
     cost: Decimal = Decimal("0")  # cost of goods sold that were sold this month
     inventory_spend: Decimal = Decimal("0")  # cost of orders placed this month, sold or not
-    profit: Decimal = Decimal("0")  # revenue - cost
+    profit: Decimal = Decimal("0")  # revenue - cost + tryon_revenue
     cash_sales: int = 0
-    cash_revenue: Decimal = Decimal("0")
-    card_revenue: Decimal = Decimal("0")
+    cash_revenue: Decimal = Decimal("0")  # sales + try-ons
+    card_revenue: Decimal = Decimal("0")  # sales + try-ons
 
 
 class NextDressCode(BaseModel):

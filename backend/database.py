@@ -66,3 +66,6 @@ async def init_db() -> None:
                     "shipping_center_received_at TIMESTAMP"
                 )
             )
+            await conn.execute(
+                text("ALTER TABLE sale ADD COLUMN IF NOT EXISTS received_by VARCHAR(20)")
+            )

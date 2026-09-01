@@ -4,7 +4,6 @@ import { useInventoryStore } from '../stores/inventory'
 
 const props = defineProps({
   dressId: { type: Number, required: true },
-  orders: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['close', 'saved'])
 
@@ -13,37 +12,36 @@ const localError = ref(null)
 
 const today = new Date().toISOString().slice(0, 10)
 const form = reactive({
-  sale_date: today,
-  sale_price: '',
+  tryon_date: today,
+  fee: '',
   payment: 'cash', // 'cash' | 'card' | 'split'
   cash_amount: '', // only used when payment === 'split'
   received_by: '', // who holds the cash — required whenever cash is involved
-  order_id: '',
   notes: '',
 })
 
-const price = computed(() => Number(form.sale_price) || 0)
-const cardPortion = computed(() => Math.max(0, price.value - (Number(form.cash_amount) || 0)))
+const fee = computed(() => Number(form.fee) || 0)
+const cardPortion = computed(() => Math.max(0, fee.value - (Number(form.cash_amount) || 0)))
 const cashInvolved = computed(() => form.payment === 'cash' || form.payment === 'split')
 
 onMounted(() => store.loadPartners().catch(() => {}))
 
-// Keep the split amount sane if the price changes after it was set.
-watch(price, (value) => {
+// Keep the split amount sane if the fee changes after it was set.
+watch(fee, (value) => {
   if (form.payment === 'split' && Number(form.cash_amount) > value) form.cash_amount = value
 })
 
 function setPayment(mode) {
   form.payment = mode
   if (mode === 'split' && form.cash_amount === '') {
-    form.cash_amount = price.value ? (price.value / 2).toFixed(2) : ''
+    form.cash_amount = fee.value ? (fee.value / 2).toFixed(2) : ''
   }
 }
 
 async function submit() {
   localError.value = null
-  if (!form.sale_date) {
-    localError.value = 'Pick a sale date.'
+  if (!form.tryon_date) {
+    localError.value = 'Pick a try-on date.'
     return
   }
   if (form.payment === 'split' && form.cash_amount === '') {
@@ -57,9 +55,8 @@ async function submit() {
 
   const payload = {
     dress_id: props.dressId,
-    order_id: form.order_id === '' ? null : Number(form.order_id),
-    sale_date: form.sale_date,
-    sale_price: form.sale_price === '' ? null : Number(form.sale_price),
+    tryon_date: form.tryon_date,
+    fee: form.fee === '' ? null : Number(form.fee),
     received_by: cashInvolved.value ? form.received_by : null,
     notes: form.notes || null,
   }
@@ -74,7 +71,7 @@ async function submit() {
   }
 
   try {
-    await store.createSale(payload)
+    await store.createTryOn(payload)
     emit('saved')
   } catch {
     localError.value = store.error
@@ -91,22 +88,22 @@ async function submit() {
       class="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[90dvh] overflow-y-auto"
       @submit.prevent="submit"
     >
-      <h2 class="text-lg font-semibold">Record a sale</h2>
+      <h2 class="text-lg font-semibold">Record a try-on</h2>
 
       <div class="grid grid-cols-2 gap-3">
         <label class="block">
-          <span class="text-sm text-stone-600">Sale date</span>
+          <span class="text-sm text-stone-600">Try-on date</span>
           <input
-            v-model="form.sale_date"
+            v-model="form.tryon_date"
             type="date"
             required
             class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
           />
         </label>
         <label class="block">
-          <span class="text-sm text-stone-600">Sale price</span>
+          <span class="text-sm text-stone-600">Fee</span>
           <input
-            v-model="form.sale_price"
+            v-model="form.fee"
             type="number"
             min="0"
             step="0.01"
@@ -114,19 +111,6 @@ async function submit() {
           />
         </label>
       </div>
-
-      <label class="block">
-        <span class="text-sm text-stone-600">From order (optional)</span>
-        <select
-          v-model="form.order_id"
-          class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2 bg-white"
-        >
-          <option value="">Not linked to an order</option>
-          <option v-for="order in orders" :key="order.id" :value="order.id">
-            {{ order.order_date }} · qty {{ order.quantity }}<template v-if="order.unit_cost"> · ${{ order.unit_cost }} each</template>
-          </option>
-        </select>
-      </label>
 
       <div class="block">
         <span class="text-sm text-stone-600">Payment</span>
@@ -164,7 +148,7 @@ async function submit() {
               v-model="form.cash_amount"
               type="number"
               min="0"
-              :max="price || undefined"
+              :max="fee || undefined"
               step="0.01"
               class="mt-0.5 w-full rounded-lg border border-stone-300 px-3 py-2"
             />
@@ -215,7 +199,7 @@ async function submit() {
           :disabled="store.saving"
           class="grow rounded-lg bg-blush-600 py-2.5 text-sm text-white disabled:opacity-60"
         >
-          {{ store.saving ? 'Saving…' : 'Record sale' }}
+          {{ store.saving ? 'Saving…' : 'Record try-on' }}
         </button>
       </div>
     </form>

@@ -46,6 +46,7 @@ function detailToMessage(payload) {
 
 export const api = {
   statuses: () => request('/statuses'),
+  partners: () => request('/partners'),
   stats: () => request('/stats'),
   monthlyStats: (month) => request('/stats/monthly', { params: { month } }),
 
@@ -77,7 +78,18 @@ export const api = {
 
   listSales: (dressId) => request('/sales', { params: { dress_id: dressId } }),
   createSale: (data) => request('/sales', { method: 'POST', body: data }),
+  updateSale: (id, data) => request(`/sales/${id}`, { method: 'PUT', body: data }),
   deleteSale: (id) => request(`/sales/${id}`, { method: 'DELETE' }),
+
+  listTryOns: (dressId) => request('/tryons', { params: { dress_id: dressId } }),
+  createTryOn: (data) => request('/tryons', { method: 'POST', body: data }),
+  updateTryOn: (id, data) => request(`/tryons/${id}`, { method: 'PUT', body: data }),
+  deleteTryOn: (id) => request(`/tryons/${id}`, { method: 'DELETE' }),
+
+  settlementSummary: () => request('/settlement/summary'),
+  listSettlements: () => request('/settlements'),
+  createSettlement: (data) => request('/settlements', { method: 'POST', body: data }),
+  deleteSettlement: (id) => request(`/settlements/${id}`, { method: 'DELETE' }),
 }
 
 export default api

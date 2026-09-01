@@ -38,6 +38,12 @@ class Dress(Base):
         order_by="Sale.sale_date.desc(), Sale.id.desc()",
         lazy="selectin",
     )
+    try_ons: Mapped[List["TryOn"]] = relationship(
+        back_populates="dress",
+        cascade="all, delete-orphan",
+        order_by="TryOn.tryon_date.desc(), TryOn.id.desc()",
+        lazy="selectin",
+    )
 
 
 class DressOrder(Base):
@@ -83,7 +89,46 @@ class Sale(Base):
     # How much of sale_price was paid in cash; the rest is card. Null means
     # "not split" — go by is_cash instead (kept for older rows/simple sales).
     cash_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    # Which partner physically holds the cash from this sale. Null on rows
+    # created before this field existed, or on card-only sales.
+    received_by: Mapped[Optional[str]] = mapped_column(String(20))
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
 
     dress: Mapped[Optional["Dress"]] = relationship(back_populates="sales")
+
+
+class TryOn(Base):
+    __tablename__ = "try_on"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    dress_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("dress.id", ondelete="CASCADE"), index=True
+    )
+    tryon_date: Mapped[date] = mapped_column(Date, nullable=False)
+    fee: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    is_cash: Mapped[Optional[bool]] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    cash_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2))
+    received_by: Mapped[Optional[str]] = mapped_column(String(20))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
+
+    dress: Mapped[Optional["Dress"]] = relationship(back_populates="try_ons")
+
+
+class Settlement(Base):
+    """A real-world cash hand-off between the two partners, recorded once it
+    happens — not a running balance itself, which is derived from these plus
+    every cash sale/try-on (see payments.py)."""
+
+    __tablename__ = "settlement"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    settlement_date: Mapped[date] = mapped_column(Date, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    paid_by: Mapped[str] = mapped_column(String(20), nullable=False)
+    paid_to: Mapped[str] = mapped_column(String(20), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
