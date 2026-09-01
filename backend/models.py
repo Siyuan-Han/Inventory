@@ -58,6 +58,7 @@ class DressOrder(Base):
 
     ordered_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     shipped_from_factory_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    shipping_center_received_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     arrived_shipping_center_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     arrived_us_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     received_at: Mapped[Optional[datetime]] = mapped_column(DateTime)

@@ -5,13 +5,22 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 # The order status pipeline, in the sequence an order moves through.
-# `arrived_us` was dropped from the active pipeline — shipping center goes
-# straight to received now. The dress_order.arrived_us_at column and the
-# OrderRead/OrderUpdate fields below stay, so any historical value already
-# on an order is preserved; it just isn't part of the pipeline going forward.
+# `arrived_us` was dropped from the active pipeline earlier — shipping
+# center goes straight to received now. The dress_order.arrived_us_at
+# column and the OrderRead/OrderUpdate fields below stay, so any historical
+# value already on an order is preserved; it just isn't part of the
+# pipeline going forward.
+#
+# `shipping_center_received` sits between the factory and shipping-center
+# legs: shipped_from_factory's tracking number covers factory -> shipping
+# center, this marks the shipping center confirming receipt of it (which
+# can lag behind the courier's own tracking), and arrived_shipping_center
+# (labelled "Shipped from shipping center") covers the outbound leg from
+# there to the US.
 ORDER_STATUSES = [
     "ordered",
     "shipped_from_factory",
+    "shipping_center_received",
     "arrived_shipping_center",
     "received",
 ]
@@ -20,6 +29,7 @@ ORDER_STATUSES = [
 STATUS_TIMESTAMP_FIELD = {
     "ordered": "ordered_at",
     "shipped_from_factory": "shipped_from_factory_at",
+    "shipping_center_received": "shipping_center_received_at",
     "arrived_shipping_center": "arrived_shipping_center_at",
     "received": "received_at",
 }
@@ -27,6 +37,7 @@ STATUS_TIMESTAMP_FIELD = {
 STATUS_LABELS = {
     "ordered": "Ordered",
     "shipped_from_factory": "Shipped from factory",
+    "shipping_center_received": "Shipping center received",
     "arrived_shipping_center": "Shipped from shipping center",
     "received": "Received",
 }
@@ -103,6 +114,7 @@ class OrderUpdate(BaseModel):
     notes: Optional[str] = None
     ordered_at: Optional[datetime] = None
     shipped_from_factory_at: Optional[datetime] = None
+    shipping_center_received_at: Optional[datetime] = None
     arrived_shipping_center_at: Optional[datetime] = None
     arrived_us_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
@@ -133,6 +145,7 @@ class OrderRead(ORMModel):
     notes: Optional[str] = None
     ordered_at: Optional[datetime] = None
     shipped_from_factory_at: Optional[datetime] = None
+    shipping_center_received_at: Optional[datetime] = None
     arrived_shipping_center_at: Optional[datetime] = None
     arrived_us_at: Optional[datetime] = None
     received_at: Optional[datetime] = None
@@ -203,6 +216,7 @@ class DressRead(ORMModel):
     total_cost: Decimal = Decimal("0")
     latest_status: Optional[str] = None
     latest_order_id: Optional[int] = None
+    latest_tracking_number: Optional[str] = None
 
 
 class DressDetail(DressRead):

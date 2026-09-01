@@ -60,3 +60,9 @@ async def init_db() -> None:
                     "NOT NULL DEFAULT 'new'"
                 )
             )
+            await conn.execute(
+                text(
+                    "ALTER TABLE dress_order ADD COLUMN IF NOT EXISTS "
+                    "shipping_center_received_at TIMESTAMP"
+                )
+            )

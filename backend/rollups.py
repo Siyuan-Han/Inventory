@@ -101,4 +101,11 @@ def dress_rollup(dress: Dress) -> Dict[str, Any]:
         "inventory_value": inventory_value,
         "latest_status": latest_order.status if latest_order else None,
         "latest_order_id": latest_order.id if latest_order else None,
+        # Only surfaced while still in transit — once received, the tracking
+        # number has done its job and just clutters the listing.
+        "latest_tracking_number": (
+            latest_order.tracking_number
+            if latest_order and latest_order.status != "received"
+            else None
+        ),
     }

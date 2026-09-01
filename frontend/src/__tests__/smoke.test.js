@@ -20,6 +20,7 @@ import { useInventoryStore } from '../stores/inventory'
 const STATUSES = [
   { value: 'ordered', label: 'Ordered', field: 'ordered_at' },
   { value: 'shipped_from_factory', label: 'Shipped from factory', field: 'shipped_from_factory_at' },
+  { value: 'shipping_center_received', label: 'Shipping center received', field: 'shipping_center_received_at' },
   { value: 'arrived_shipping_center', label: 'Shipped from shipping center', field: 'arrived_shipping_center_at' },
   { value: 'received', label: 'Received', field: 'received_at' },
 ]
@@ -35,6 +36,7 @@ const ORDER = {
   notes: 'split shipment',
   ordered_at: '2026-08-01T10:00:00',
   shipped_from_factory_at: '2026-08-05T10:00:00',
+  shipping_center_received_at: null, // predates this stage being added — a realistic historical gap
   arrived_shipping_center_at: '2026-08-10T10:00:00',
   arrived_us_at: null,
   received_at: null,
@@ -84,6 +86,7 @@ const DRESS = {
   total_cost: '150.00',
   latest_status: 'arrived_shipping_center',
   latest_order_id: 1,
+  latest_tracking_number: null,
   orders: [ORDER],
   sales: [SALE, SPLIT_SALE],
 }
@@ -99,6 +102,7 @@ const SECONDHAND_ORDER = {
   notes: null,
   ordered_at: '2026-08-15T10:00:00',
   shipped_from_factory_at: '2026-08-16T10:00:00',
+  shipping_center_received_at: '2026-08-16T12:00:00',
   arrived_shipping_center_at: '2026-08-17T10:00:00',
   arrived_us_at: null,
   received_at: null,
@@ -124,6 +128,7 @@ const SECONDHAND_DRESS = {
   total_cost: '90.00',
   latest_status: 'arrived_shipping_center',
   latest_order_id: 10,
+  latest_tracking_number: 'SH-TRACK-1',
   orders: [SECONDHAND_ORDER],
   sales: [],
 }
@@ -292,6 +297,8 @@ describe('views and components render', () => {
     })
     expect(wrapper.text()).toContain('WD001')
     expect(wrapper.text()).toContain('Shanghai Factory')
+    // The full 5-stage timeline renders, including the new stage.
+    expect(wrapper.text()).toContain('Shipping center received')
     // The next unreached stage is offered as an action.
     expect(wrapper.text()).toContain('Mark received')
     expect(wrapper.text()).toContain('Cash')
@@ -581,6 +588,20 @@ describe('views and components render', () => {
     })
     expect(wrapper.get('a').attributes('href')).toBe('/secondhand/2')
   })
+
+  it('DressCard shows the tracking number while in transit, hides it once received', () => {
+    const inTransit = mount(DressCard, {
+      props: { dress: SECONDHAND_DRESS }, // latest_tracking_number: 'SH-TRACK-1', not received
+      global: { plugins: [createPinia(), makeRouter()] },
+    })
+    expect(inTransit.text()).toContain('Tracking: SH-TRACK-1')
+
+    const received = mount(DressCard, {
+      props: { dress: { ...SECONDHAND_DRESS, latest_status: 'received', latest_tracking_number: null } },
+      global: { plugins: [createPinia(), makeRouter()] },
+    })
+    expect(received.text()).not.toContain('Tracking:')
+  })
 })
 
 describe('inventory store', () => {
@@ -599,7 +620,7 @@ describe('inventory store', () => {
     const store = useInventoryStore()
     await store.loadStatuses()
     expect(store.statusLabel('arrived_shipping_center')).toBe('Shipped from shipping center')
-    expect(store.statusIndex('received')).toBe(3)
+    expect(store.statusIndex('received')).toBe(4)
   })
 
   it('archiving a dress drops it from the currently loaded list', async () => {
@@ -612,7 +633,7 @@ describe('inventory store', () => {
   it('nextStatus gives the stage right after the current one, or null at the end', async () => {
     const store = useInventoryStore()
     await store.loadStatuses()
-    expect(store.nextStatus('shipped_from_factory').value).toBe('arrived_shipping_center')
+    expect(store.nextStatus('shipped_from_factory').value).toBe('shipping_center_received')
     expect(store.nextStatus('received')).toBeNull()
   })
 
