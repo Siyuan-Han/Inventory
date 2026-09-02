@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from models import Dress, DressOrder, Sale
 from payments import check_cash_amount, require_received_by, validate_partner
+from routers.dresses import utcnow
 from schemas import SaleCreate, SaleRead, SaleUpdate
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -32,7 +33,8 @@ async def list_sales(
 
 @router.post("", response_model=SaleRead, status_code=201)
 async def create_sale(payload: SaleCreate, db: AsyncSession = Depends(get_db)) -> Sale:
-    if await db.get(Dress, payload.dress_id) is None:
+    dress = await db.get(Dress, payload.dress_id)
+    if dress is None:
         raise HTTPException(status_code=404, detail=f"Dress {payload.dress_id} not found")
 
     if payload.order_id is not None:
@@ -57,6 +59,13 @@ async def create_sale(payload: SaleCreate, db: AsyncSession = Depends(get_db)) -
 
     sale = Sale(**data)
     db.add(sale)
+
+    # A secondhand piece is one of a kind — once it's sold there's nothing
+    # left to track actively, so it moves straight to the archive. Still
+    # restorable by hand for the rare return.
+    if dress.category == "secondhand" and dress.archived_at is None:
+        dress.archived_at = utcnow()
+
     await db.commit()
     await db.refresh(sale)
     return sale

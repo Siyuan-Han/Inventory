@@ -111,16 +111,16 @@ async function submit() {
       </div>
 
       <div class="grid grid-cols-2 gap-3">
-        <label class="block">
+        <label class="block min-w-0">
           <span class="text-sm text-stone-600">Acquired on</span>
           <input
             v-model="form.order_date"
             type="date"
             required
-            class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+            class="mt-1 w-full min-w-0 rounded-lg border border-stone-300 px-3 py-2"
           />
         </label>
-        <label class="block">
+        <label class="block min-w-0">
           <span class="text-sm text-stone-600">Status</span>
           <select
             v-model="form.status"

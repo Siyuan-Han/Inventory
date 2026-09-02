@@ -6,11 +6,13 @@ import { useInventoryStore } from './stores/inventory'
 const store = useInventoryStore()
 const route = useRoute()
 
+// No dedicated "Add" tab — each of Dresses/Secondhand has its own add
+// button on the list page, and a nav-level shortcut only ever pointed at
+// the "new" category, which stopped making sense once secondhand existed.
 const tabs = [
   { name: 'dashboard', label: 'Dashboard', icon: '◱' },
   { name: 'dresses', label: 'Dresses', icon: '❖' },
   { name: 'secondhand', label: 'Secondhand', icon: '⟲' },
-  { name: 'dress-new', label: 'Add', icon: '＋' },
 ]
 
 // Detail and edit pages live "under" their list, so keep that tab lit.
@@ -65,7 +67,7 @@ onMounted(() => store.loadStatuses().catch(() => {}))
     <nav
       class="sm:hidden fixed bottom-0 inset-x-0 z-20 bg-white border-t border-stone-200 pb-[env(safe-area-inset-bottom)]"
     >
-      <div class="grid grid-cols-4">
+      <div class="grid grid-cols-3">
         <RouterLink
           v-for="tab in tabs"
           :key="tab.name"

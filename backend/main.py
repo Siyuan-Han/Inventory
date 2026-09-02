@@ -200,16 +200,24 @@ async def monthly_stats(
 
 @meta_router.get("/settlement/summary", response_model=SettlementSummary)
 async def settlement_summary(db: AsyncSession = Depends(get_db)) -> SettlementSummary:
-    """Each partner's net cash position and what's owed to equalize —
-    replaces the manual spreadsheet's (Camille - Zoe) / 2 reconciliation.
+    """Each partner's cash position and what's owed to equalize — replaces
+    the manual spreadsheet's (Camille - Zoe) / 2 reconciliation.
+
+    A settlement means "as of that date, we're even" — it clears the tally
+    rather than just offsetting a running lifetime total, so both partners
+    read 0 right after settling and the count starts fresh from there.
     """
     sales = (await db.scalars(select(Sale))).all()
     tryons = (await db.scalars(select(TryOn))).all()
     all_settlements = (await db.scalars(select(Settlement))).all()
 
+    since = max((s.settlement_date for s in all_settlements), default=None)
+
     collected = {p: Decimal("0") for p in PARTNERS}
     unattributed = Decimal("0")
     for sale in sales:
+        if since is not None and sale.sale_date <= since:
+            continue
         cash, _ = sale_payment_split(sale)
         if cash <= 0:
             continue
@@ -218,6 +226,8 @@ async def settlement_summary(db: AsyncSession = Depends(get_db)) -> SettlementSu
         else:
             unattributed += cash
     for tryon in tryons:
+        if since is not None and tryon.tryon_date <= since:
+            continue
         cash, _ = tryon_payment_split(tryon)
         if cash <= 0:
             continue
@@ -226,27 +236,11 @@ async def settlement_summary(db: AsyncSession = Depends(get_db)) -> SettlementSu
         else:
             unattributed += cash
 
-    paid = {p: Decimal("0") for p in PARTNERS}
-    received = {p: Decimal("0") for p in PARTNERS}
-    for s in all_settlements:
-        if s.paid_by in paid:
-            paid[s.paid_by] += s.amount
-        if s.paid_to in received:
-            received[s.paid_to] += s.amount
-
     positions = [
-        PartnerCashPosition(
-            partner=p,
-            label=PARTNER_LABELS[p],
-            cash_collected=collected[p],
-            settlements_paid=paid[p],
-            settlements_received=received[p],
-            net_position=collected[p] - paid[p] + received[p],
-        )
+        PartnerCashPosition(partner=p, label=PARTNER_LABELS[p], cash_collected=collected[p])
         for p in PARTNERS
     ]
-    net_by_partner = {pos.partner: pos.net_position for pos in positions}
-    to_equalize = (net_by_partner["camille"] - net_by_partner["zoe"]) / 2
+    to_equalize = (collected["camille"] - collected["zoe"]) / 2
 
     return SettlementSummary(
         positions=positions,
@@ -259,6 +253,7 @@ async def settlement_summary(db: AsyncSession = Depends(get_db)) -> SettlementSu
             if to_equalize > 0
             else "zoe_to_camille"
         ),
+        since=since,
     )
 
 

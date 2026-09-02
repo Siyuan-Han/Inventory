@@ -210,6 +210,9 @@ onMounted(async () => {
           Record settlement
         </button>
       </div>
+      <p class="text-xs text-stone-400">
+        Cash collected {{ store.settlementSummary?.since ? `since ${store.settlementSummary.since}` : 'all time (no settlement recorded yet)' }}
+      </p>
 
       <div class="grid grid-cols-2 gap-3">
         <div
@@ -218,10 +221,7 @@ onMounted(async () => {
           class="rounded-lg bg-stone-50 border border-stone-200 p-3"
         >
           <p class="text-xs text-stone-500">{{ pos.label }}</p>
-          <p class="mt-0.5 text-xl font-semibold tabular-nums">{{ money(pos.net_position) }}</p>
-          <p class="mt-0.5 text-[11px] text-stone-400">
-            {{ money(pos.cash_collected) }} collected
-          </p>
+          <p class="mt-0.5 text-xl font-semibold tabular-nums">{{ money(pos.cash_collected) }}</p>
         </div>
       </div>
 
@@ -249,15 +249,15 @@ onMounted(async () => {
         @submit.prevent="submitSettlement"
       >
         <div class="grid grid-cols-2 gap-2">
-          <label class="block">
+          <label class="block min-w-0">
             <span class="text-xs text-stone-500">Date</span>
             <input
               v-model="settlementForm.settlement_date"
               type="date"
-              class="mt-0.5 w-full rounded-lg border border-stone-300 px-2 py-1.5 text-sm"
+              class="mt-0.5 w-full min-w-0 rounded-lg border border-stone-300 px-2 py-1.5 text-sm"
             />
           </label>
-          <label class="block">
+          <label class="block min-w-0">
             <span class="text-xs text-stone-500">Amount</span>
             <input
               v-model="settlementForm.amount"

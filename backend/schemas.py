@@ -263,10 +263,10 @@ class SettlementRead(ORMModel):
 class PartnerCashPosition(BaseModel):
     partner: str
     label: str
+    # Cash collected since the last settlement (or all-time, if none yet).
+    # A settlement is treated as "we're even as of that date" — it clears
+    # the tally rather than just adjusting a running lifetime total.
     cash_collected: Decimal = Decimal("0")
-    settlements_paid: Decimal = Decimal("0")
-    settlements_received: Decimal = Decimal("0")
-    net_position: Decimal = Decimal("0")
 
 
 class SettlementSummary(BaseModel):
@@ -274,6 +274,7 @@ class SettlementSummary(BaseModel):
     unattributed_cash: Decimal = Decimal("0")
     to_equalize: Decimal = Decimal("0")
     equalize_direction: Optional[str] = None  # "camille_to_zoe" | "zoe_to_camille" | None
+    since: Optional[date] = None  # the last settlement's date, or None if there hasn't been one
 
 
 # --------------------------------------------------------------------------

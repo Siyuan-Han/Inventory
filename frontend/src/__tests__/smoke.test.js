@@ -198,12 +198,13 @@ const MONTHLY_STATS = {
 
 const SETTLEMENT_SUMMARY = {
   positions: [
-    { partner: 'camille', label: 'Camille', cash_collected: '965.00', settlements_paid: '0', settlements_received: '0', net_position: '965.00' },
-    { partner: 'zoe', label: 'Zoe', cash_collected: '840.00', settlements_paid: '0', settlements_received: '0', net_position: '840.00' },
+    { partner: 'camille', label: 'Camille', cash_collected: '965.00' },
+    { partner: 'zoe', label: 'Zoe', cash_collected: '840.00' },
   ],
   unattributed_cash: '30.00',
   to_equalize: '62.50',
   equalize_direction: 'camille_to_zoe',
+  since: null,
 }
 
 const SETTLEMENT = {
@@ -487,6 +488,14 @@ describe('views and components render', () => {
     expect(wrapper.text()).toContain('$25.00')
     expect(wrapper.text()).toContain('Zoe')
     expect(wrapper.text()).toContain('Try-on fees')
+  })
+
+  it('TryOnForm defaults the fee to $30', async () => {
+    const wrapper = mount(TryOnForm, {
+      props: { dressId: 1 },
+      global: { plugins: [createPinia()] },
+    })
+    expect(wrapper.find('input[type="number"]').element.value).toBe('30')
   })
 
   it('TryOnForm records a cash try-on with the receiving partner', async () => {

@@ -13,7 +13,7 @@ const localError = ref(null)
 const today = new Date().toISOString().slice(0, 10)
 const form = reactive({
   tryon_date: today,
-  fee: '',
+  fee: '30',
   payment: 'cash', // 'cash' | 'card' | 'split'
   cash_amount: '', // only used when payment === 'split'
   received_by: '', // who holds the cash — required whenever cash is involved
@@ -91,16 +91,16 @@ async function submit() {
       <h2 class="text-lg font-semibold">Record a try-on</h2>
 
       <div class="grid grid-cols-2 gap-3">
-        <label class="block">
+        <label class="block min-w-0">
           <span class="text-sm text-stone-600">Try-on date</span>
           <input
             v-model="form.tryon_date"
             type="date"
             required
-            class="mt-1 w-full rounded-lg border border-stone-300 px-3 py-2"
+            class="mt-1 w-full min-w-0 rounded-lg border border-stone-300 px-3 py-2"
           />
         </label>
-        <label class="block">
+        <label class="block min-w-0">
           <span class="text-sm text-stone-600">Fee</span>
           <input
             v-model="form.fee"
